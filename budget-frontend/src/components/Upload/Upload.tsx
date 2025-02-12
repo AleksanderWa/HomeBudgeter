@@ -1,35 +1,69 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import api from '../../client/api/client.ts'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { isAuthenticated, user } = useAuth()
+
+  useEffect(() => {
+    console.log('Upload Component - Authentication State:', {
+      isAuthenticated,
+      user: user ? user.username : 'No user'
+    })
+  }, [isAuthenticated, user])
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('File input change event triggered')
+    console.log('Event target:', event.target)
+    console.log('Files in input:', event.target.files)
+
     const selectedFile = event.target.files?.[0]
+    
+    console.log('Selected file details:', {
+      name: selectedFile?.name,
+      type: selectedFile?.type,
+      size: selectedFile?.size
+    })
+
     setError(null)
     setSuccess(false)
 
     if (!selectedFile) {
+      console.warn('No file selected')
       return
     }
 
     // Check if file is CSV
     if (!selectedFile.name.endsWith('.csv')) {
+      console.warn('Invalid file type')
       setError('Please upload a CSV file')
       return
     }
 
     setFile(selectedFile)
+    console.log('File state updated successfully')
+  }
+
+  const triggerFileInput = () => {
+    console.log('Triggering file input manually')
+    fileInputRef.current?.click()
   }
 
   const handleUpload = async (event: React.FormEvent) => {
     event.preventDefault()
     
+    console.log('Upload button clicked')
+    console.log('Current file:', file)
+    console.log('Is uploading:', isUploading)
+    
     if (!file) {
       setError('Please select a file')
+      console.warn('No file to upload')
       return
     }
 
@@ -40,17 +74,23 @@ export default function Upload() {
     formData.append('file', file)
 
     try {
-      await api.post('/transactions/upload', formData, {
+      console.log('Attempting to upload file')
+      await api.put('/transactions/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       })
       setSuccess(true)
       setFile(null)
+      
       // Reset file input
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-      if (fileInput) fileInput.value = ''
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      
+      console.log('File uploaded successfully')
     } catch (err: any) {
+      console.error('Upload error:', err)
       setError(err.response?.data?.detail || 'Error uploading file')
     } finally {
       setIsUploading(false)
@@ -67,7 +107,10 @@ export default function Upload() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Upload CSV File
             </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+            <div 
+              className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md"
+              onClick={triggerFileInput}
+            >
               <div className="space-y-1 text-center">
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"
@@ -90,6 +133,7 @@ export default function Upload() {
                   >
                     <span>Upload a file</span>
                     <input
+                      ref={fileInputRef}
                       id="file-upload"
                       name="file-upload"
                       type="file"
@@ -106,19 +150,19 @@ export default function Upload() {
           </div>
 
           {file && (
-            <div className="text-sm text-gray-600">
-              Selected file: {file.name}
+            <div className="text-sm text-gray-600 mb-4 p-2 bg-gray-100 rounded">
+              <strong>Selected file:</strong> {file.name}
             </div>
           )}
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded mb-4">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
+            <div className="text-sm text-green-600 bg-green-50 p-2 rounded mb-4">
               File uploaded successfully!
             </div>
           )}
@@ -127,9 +171,11 @@ export default function Upload() {
             type="submit"
             disabled={!file || isUploading}
             className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
-              ${!file || isUploading 
+              ${isUploading 
                 ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary'
+                : (file 
+                  ? 'bg-blue-400'
+                  : 'bg-gray-400 cursor-not-allowed')
               }`}
           >
             {isUploading ? 'Uploading...' : 'Upload'}
@@ -138,4 +184,4 @@ export default function Upload() {
       </div>
     </div>
   )
-} 
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import ExpenseChart from './ExpenseChart.tsx'
 import ExpenseList from './ExpenseList.tsx'
 import useExpenses from '../../hooks/useExpenses.ts'
@@ -12,20 +12,32 @@ export default function Dashboard() {
   const [excludeIncome, setExcludeIncome] = useState(false)
   const [topLimit, setTopLimit] = useState(5)
 
-  // Process data for chart
-  const chartData = expenses.reduce((acc, expense) => {
-    const category = expense.category || 'Uncategorized'
-    if (!acc[category]) {
-      acc[category] = 0
-    }
-    acc[category] += expense.amount
-    return acc
-  }, {} as Record<string, number>)
+  // Process data for chart and top categories
+  const chartData = useMemo(() => {
+    return expenses.reduce((acc, expense) => {
+      const category = expense.category || 'Uncategorized'
+      if (!acc[category]) {
+        acc[category] = 0
+      }
+      acc[category] += expense.amount
+      return acc
+    }, {} as Record<string, number>)
+  }, [expenses])
 
-  const chartDataArray = Object.entries(chartData).map(([category, amount]) => ({
-    category,
-    amount: amount as number
-  }))
+  const chartDataArray = useMemo(() => 
+    Object.entries(chartData)
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .slice(0, topLimit)
+  , [chartData, topLimit])
+
+  // Filtered transactions based on top categories
+  const topCategoryTransactions = useMemo(() => {
+    const topCategories = new Set(chartDataArray.map(item => item.category))
+    return expenses.filter(expense => 
+      topCategories.has(expense.category)
+    )
+  }, [expenses, chartDataArray])
 
   return (
     <div className="container mx-auto p-4">
@@ -34,22 +46,28 @@ export default function Dashboard() {
       {loading ? (
         <Loader />
       ) : (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <ExpenseChart
-                data={chartDataArray}
-                excludeIncome={excludeIncome}
-                onExcludeIncome={() => setExcludeIncome(!excludeIncome)}
-                topLimit={topLimit}
-                onLimitChange={setTopLimit}
-              />
-            </div>
-            <div>
-              <ExpenseList expenses={expenses} />
-            </div>
+        <div className="space-y-6">
+          <div className="w-full max-w-4xl mx-auto">
+            <ExpenseChart
+              data={chartDataArray}
+              excludeIncome={excludeIncome}
+              onExcludeIncome={() => setExcludeIncome(!excludeIncome)}
+              topLimit={topLimit}
+              onLimitChange={setTopLimit}
+              className="h-[500px] w-full"
+            />
           </div>
-        </>
+
+          <div className="w-full max-w-4xl mx-auto">
+            <h2 className="text-xl font-semibold mb-4">
+              Top {topLimit} Categories Transactions
+            </h2>
+            <ExpenseList 
+              expenses={topCategoryTransactions} 
+              hideFilters={true}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

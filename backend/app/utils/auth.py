@@ -11,7 +11,7 @@ import os
 
 router = APIRouter()
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "secret")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -50,7 +50,7 @@ def get_current_user(
         # Decode the JWT token
         payload = jwt.decode(
             token,
-            os.getenv("JWT_SECRET_KEY"),
+            SECRET_KEY,
             algorithms=[os.getenv("JWT_ALGORITHM", "HS256")]
         )
         email: str = payload.get("sub")

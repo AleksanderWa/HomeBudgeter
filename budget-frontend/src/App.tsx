@@ -13,7 +13,7 @@ import ExpenseList from './components/Dashboard/ExpenseList.tsx'
 import Upload from './components/Upload/Upload.tsx'
 import axios from 'axios'
 
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 
 // Configure axios defaults and interceptors
 axios.defaults.baseURL = API_URL;
@@ -34,8 +34,13 @@ const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth()
   console.log('App Auth state:', isAuthenticated)
 
+  // Optional: Add a loading spinner or placeholder
   if (isAuthenticated === undefined) {
-    return <div>Loading...</div>
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
@@ -47,7 +52,7 @@ const AppContent: React.FC = () => {
           <Route path="/register" element={<Register />} />
           <Route element={<PrivateRoute />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/list" element={<ExpenseList expenses={[]} />} />
+            <Route path="/list" element={<ExpenseList />} />
             <Route path="/upload" element={<Upload />} />
           </Route>
         </Routes>
@@ -55,7 +60,7 @@ const AppContent: React.FC = () => {
       {isAuthenticated && <MobileNav />}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center">
-          © 2023 Budget Tracker. All rights reserved.
+          &copy; 2023 Budget Tracker. All rights reserved.
         </div>
       </footer>
     </div>

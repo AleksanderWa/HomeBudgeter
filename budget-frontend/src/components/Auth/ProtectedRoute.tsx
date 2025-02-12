@@ -3,9 +3,9 @@ import { useAuth } from '../../contexts/AuthContext.tsx'
 import React from 'react'
 
 export default function ProtectedRoute() {
-  const { user } = useAuth()
+  const { isAuthenticated } = useAuth()
 
-  if (!user) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
 

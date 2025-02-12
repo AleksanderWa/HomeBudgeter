@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import React from 'react'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -13,7 +14,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await axios.post('/auth/login', {
+      const response = await axios.post('/api/auth/login', {
         email,
         password,
       })

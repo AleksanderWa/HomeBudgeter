@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+import os
+from datetime import datetime, timedelta
+
 from backend.app.database.database import get_db
 from backend.app.models.user import User
-from backend.app.schemas.schemas import UserCreate, Token
-from passlib.context import CryptContext
-from datetime import timedelta, datetime
+from backend.app.schemas.schemas import Token, UserCreate
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-import os
+from passlib.context import CryptContext
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -44,25 +45,27 @@ def verify_token(token: str):
         return None
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     payload = verify_token(token)
     if payload is None:
         raise credentials_exception
-    
+
     email: str = payload.get("sub")
     if email is None:
         raise credentials_exception
-    
+
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
-    
+
     return user
 
 

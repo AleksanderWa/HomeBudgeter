@@ -51,8 +51,57 @@ class TransactionBase(BaseModel):
             Decimal: lambda v: float(v)  # Convert Decimal to float for JSON serialization
         }
 
-class TransactionCreate(TransactionBase):
-    pass
+class TransactionCreate(BaseModel):
+    """
+    Schema for creating a new transaction.
+    Validates input data for transaction creation.
+    """
+    operation_date: Union[datetime, date]
+    description: str
+    category: str
+    amount: Decimal = Field(..., decimal_places=2)
+    account: Optional[str] = 'default'  # Optional account field with a default value
+
+    @validator('amount', pre=True)
+    def convert_to_decimal(cls, v):
+        """
+        Converts various input types to Decimal with 2 decimal places
+        """
+        if isinstance(v, (int, float, str)):
+            return round(Decimal(str(v)), 2)
+        return v
+
+    @validator('description')
+    def validate_description(cls, v):
+        """
+        Validate that description is not empty
+        """
+        if not v or len(v.strip()) == 0:
+            raise ValueError('Description cannot be empty')
+        return v.strip()
+
+    @validator('category')
+    def validate_category(cls, v):
+        """
+        Validate that category is not empty
+        """
+        if not v or len(v.strip()) == 0:
+            raise ValueError('Category cannot be empty')
+        return v.strip()
+
+    class Config:
+        json_encoders = {
+            Decimal: lambda v: float(v)  # Convert Decimal to float for JSON serialization
+        }
+        schema_extra = {
+            "example": {
+                "operation_date": "2023-06-15",
+                "description": "Grocery shopping",
+                "category": "Food",
+                "amount": -50.25,
+                "account": "default"
+            }
+        }
 
 class TransactionResponse(TransactionBase):
     id: int
@@ -67,6 +116,42 @@ class TransactionUpdate(BaseModel):
     account: Optional[str] = None
     category: Optional[str] = None
     amount: Optional[Decimal] = None
+
+# Category-related schemas
+class CategoryCreate(BaseModel):
+    """
+    Schema for creating a new category.
+    Validates input data for category creation.
+    """
+    name: str
+
+    @validator('name')
+    def validate_category_name(cls, v):
+        """
+        Validate category name:
+        - Remove leading/trailing whitespace
+        - Ensure non-empty
+        - Limit length
+        """
+        # Remove leading and trailing whitespace
+        cleaned_name = v.strip()
+        
+        # Check if name is empty after stripping
+        if not cleaned_name:
+            raise ValueError('Category name cannot be empty')
+        
+        # Optional: Add length constraint
+        if len(cleaned_name) > 50:
+            raise ValueError('Category name must be 50 characters or less')
+        
+        return cleaned_name
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Groceries"
+            }
+        }
 
 # Pagination schema
 class PaginatedTransactions(BaseModel):

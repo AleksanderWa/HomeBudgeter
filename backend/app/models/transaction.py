@@ -1,9 +1,8 @@
-from sqlalchemy import Column, Integer, String, Date, Float, ForeignKey
-
 from backend.app.database.database import Base
-
+from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String
 
 # from app.database.database import Base
+
 
 class Transaction(Base):
     __tablename__ = "transactions"

@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+import os
+from datetime import datetime, timedelta
+
 from backend.app.database.database import get_db
 from backend.app.models.user import User
 from backend.app.schemas.schemas import TokenData
-from passlib.context import CryptContext
-from datetime import timedelta, datetime
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-import os
+from passlib.context import CryptContext
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -22,8 +23,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+
 def get_password_hash(password):
     return pwd_context.hash(password)
+
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -33,9 +36,9 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> User:
     """
     Decode and validate the JWT token to get the current authenticated user.
@@ -49,9 +52,7 @@ def get_current_user(
     try:
         # Decode the JWT token
         payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[os.getenv("JWT_ALGORITHM", "HS256")]
+            token, SECRET_KEY, algorithms=[os.getenv("JWT_ALGORITHM", "HS256")]
         )
         email: str = payload.get("sub")
         if email is None:

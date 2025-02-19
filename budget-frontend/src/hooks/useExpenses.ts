@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import api from '../client/api/client.ts'
+
+interface Category {
+  id: number
+  name: string
+  user_id: number
+}
 
 interface Expense {
   id: string
   operation_date: string
   description: string
-  category: string
+  category: Category
   amount: number
+  account: string
 }
 
 interface PaginatedExpenses {
@@ -50,9 +57,22 @@ export default function useExpenses() {
     }
   }
 
+  const handleTransactionsUpdated = useCallback((event: CustomEvent) => {
+    const { transactions } = event.detail;
+    setExpenses(transactions);
+  }, []);
+
   useEffect(() => {
     fetchExpenses()
-  }, [])
+
+    // Add event listener for transaction updates
+    window.addEventListener('transactionsUpdated', handleTransactionsUpdated as EventListener);
+
+    // Cleanup listener
+    return () => {
+      window.removeEventListener('transactionsUpdated', handleTransactionsUpdated as EventListener);
+    }
+  }, [handleTransactionsUpdated])
 
   return { 
     expenses, 

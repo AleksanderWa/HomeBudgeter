@@ -1,38 +1,95 @@
 // components/Dashboard/ExpenseList.tsx
 
-import React, { useMemo } from 'react';
-import { useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import useExpenses from '../../hooks/useExpenses.ts';
+import axios from 'axios';
 
 interface ExpenseListProps {
   expenses?: any[];
   hideFilters?: boolean;
 }
 
+const duration = 300;
+
+const defaultStyle = {
+  transition: `opacity ${duration}ms ease-in-out, transform ${duration}ms ease-in-out`,
+  opacity: 1,
+  transform: 'translateX(0)',
+};
+
+const transitionStyles = {
+  exiting: { 
+    opacity: 0, 
+    transform: 'translateX(-100%)',
+  },
+};
+
 export default function ExpenseList({ 
   expenses: propExpenses, 
   hideFilters = false 
 }: ExpenseListProps) {
-  const { expenses: hookExpenses, loading, error } = useExpenses();
+  const { 
+    expenses: hookExpenses, 
+    loading, 
+    error, 
+    refresh 
+  } = useExpenses();
+  const [localExpenses, setLocalExpenses] = useState<any[]>([]);
   const expenses = propExpenses || hookExpenses;
+
+  // Sync local expenses with hook expenses
+  React.useEffect(() => {
+    setLocalExpenses(expenses);
+  }, [expenses]);
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTransactionId, setSelectedTransactionId] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletedTransactionIds, setDeletedTransactionIds] = useState<string[]>([]);
 
   const filteredExpenses = useMemo(() => {
     if (loading || error) return [];
 
-    return expenses.filter(expense => {
+    return localExpenses.filter(expense => {
       const matchesDate = (!startDate || new Date(expense.operation_date) >= startDate) &&
                          (!endDate || new Date(expense.operation_date) <= endDate);
       const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesDate && matchesSearch;
     });
-  }, [expenses, startDate, endDate, searchTerm, loading, error]);
+  }, [localExpenses, startDate, endDate, searchTerm, loading, error]);
+
+  const handleDeleteTransaction = async () => {
+    if (!selectedTransactionId) return;
+
+    try {
+      // Immediately add to deleted transactions to apply red color
+      setDeletedTransactionIds(prev => [...prev, selectedTransactionId]);
+
+      await axios.delete(`/api/transactions/${selectedTransactionId}`, {
+        validateStatus: (status) => status === 204 // Only consider 204 as a successful response
+      });
+
+      // Remove from local expenses after animation
+      setTimeout(() => {
+        const updatedExpenses = localExpenses.filter(expense => expense.id !== selectedTransactionId);
+        setLocalExpenses(updatedExpenses);
+        setDeletedTransactionIds(prev => prev.filter(id => id !== selectedTransactionId));
+      }, 700);
+
+      // Close modal and reset selected transaction
+      setDeleteModalOpen(false);
+      setSelectedTransactionId(null);
+    } catch (error) {
+      console.error('Failed to delete transaction', error);
+      // Remove from deleted transactions if API call fails
+      setDeletedTransactionIds(prev => prev.filter(id => id !== selectedTransactionId));
+    }
+  };
 
   if (loading) {
     return <div>Loading expenses...</div>;
@@ -98,25 +155,101 @@ export default function ExpenseList({
                 <th className="p-2">Description</th>
                 <th className="p-2">Category</th>
                 <th className="p-2 text-right">Amount</th>
+                <th className="p-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredExpenses.map(expense => (
-                <tr key={expense.id} className="border-b hover:bg-gray-50">
+                <tr 
+                  key={expense.id}
+                  className={`border-b hover:bg-gray-50 transition-all duration-700 ease-in-out 
+                    ${deletedTransactionIds.includes(expense.id) 
+                      ? 'opacity-0 transform -translate-x-full' 
+                      : 'opacity-100 transform translate-x-0'}`}
+                  style={{
+                    backgroundColor: deletedTransactionIds.includes(expense.id) 
+                      ? '#e73a2b' // A more intense red that's more visible
+                      : 'transparent'
+                  }}
+                >
                   <td className="p-2 text-sm">{new Date(expense.operation_date).toLocaleDateString()}</td>
                   <td className="p-2 text-sm break-words whitespace-normal max-w-xs">{expense.description}</td>
                   <td className="p-2">
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                      {expense.category}
+                      {expense.category.name}
                     </span>
                   </td>
                   <td className={`p-2 text-right text-sm ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </td>
+                  <td className="p-2 text-right">
+                    <button 
+                      onClick={() => {
+                        setSelectedTransactionId(expense.id);
+                        setDeleteModalOpen(true);
+                      }}
+                      className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100 transition-colors"
+                    >
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div 
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+              aria-hidden="true"
+            ></div>
+
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+              <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" aria-hidden="true" />
+                  </div>
+                  <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                    <h3 
+                      className="text-base font-semibold leading-6 text-gray-900" 
+                      id="modal-title"
+                    >
+                      Delete Transaction
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500">
+                        Are you sure you want to delete this transaction? 
+                        This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <button 
+                  type="button" 
+                  onClick={handleDeleteTransaction}
+                  className="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+                >
+                  <TrashIcon className="-ml-0.5 mr-2 h-5 w-5" />
+                  Delete
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -2,17 +2,23 @@ import csv
 import io
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Optional
+from typing import Optional, List
 
 from backend.app.database.database import get_db
-from backend.app.models.transaction import Transaction
+from backend.app.models.transaction import Transaction, Category, Plan, CategoryLimit
 from backend.app.models.user import User
-from backend.app.models.models import Category  # Assuming we'll create this model
 from backend.app.schemas.schemas import (
+    CategoryResponse,
     PaginatedTransactions,
     TransactionBase,
     TransactionCreate,
     CategoryCreate,
+    TransactionResponse,
+    CategoryInTransaction,
+    CreatePlan,
+    CreateCategoryLimit,
+    PlanResponse,
+    CategoryLimitResponse,
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -35,6 +41,33 @@ async def upload_transactions(
 
     reader = csv.DictReader(csv_file, delimiter=";")
 
+    # First, process and create unique categories
+    category_names = set(
+        row["#Kategoria"]
+        for row in csv.DictReader(io.StringIO(text_contents), delimiter=";")
+    )
+
+    # Create or get existing categories
+    categories = {}
+    for category_name in category_names:
+        existing_category = (
+            db.query(Category)
+            .filter(Category.name == category_name, Category.user_id == current_user.id)
+            .first()
+        )
+
+        if not existing_category:
+            new_category = Category(name=category_name, user_id=current_user.id)
+            db.add(new_category)
+            db.flush()  # This will assign an ID to the new category
+            categories[category_name] = new_category.id
+        else:
+            categories[category_name] = existing_category.id
+
+    # Reset the CSV reader
+    csv_file = io.StringIO(text_contents)
+    reader = csv.DictReader(csv_file, delimiter=";")
+
     transactions = []
     for row in reader:
         try:
@@ -54,7 +87,9 @@ async def upload_transactions(
                 ).date(),
                 description=row["#Opis operacji"],
                 account=row["#Rachunek"],
-                category=row["#Kategoria"],
+                category=categories[
+                    row["#Kategoria"]
+                ],  # Use category ID instead of name
                 amount=amount,
                 user_id=current_user.id,
             )
@@ -122,27 +157,27 @@ def get_transaction_categories(
     Returns a list of unique category names sorted alphabetically.
     """
     categories = (
-        db.query(Transaction.category)
-        .filter(Transaction.user_id == current_user.id)
+        db.query(Category.name)
+        .filter(Category.user_id == current_user.id)
         .distinct()
-        .order_by(Transaction.category)
+        .order_by(Category.name)
         .all()
     )
 
-    unique_categories = [cat[0] for cat in categories if cat[0] and cat[0].strip()]
+    # unique_categories = [cat[0] for cat in categories if cat[0] and cat[0].strip()]
 
-    return {"categories": unique_categories}
+    return {"categories": set([cat[0] for cat in categories])}
 
 
 @router.post("/categories", response_model=dict)
 def create_category(
     category_data: CategoryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a new category for the current user.
-    
+
     - Validates the category name
     - Checks for uniqueness per user
     - Prevents duplicate categories
@@ -150,53 +185,44 @@ def create_category(
     try:
         # Normalize category name (strip whitespace, convert to title case)
         normalized_name = category_data.name.strip().title()
-        
+
         # Check if category already exists for this user
         existing_category = (
             db.query(Category)
             .filter(
-                Category.name.ilike(normalized_name), 
-                Category.user_id == current_user.id
+                Category.name.ilike(normalized_name),
+                Category.user_id == current_user.id,
             )
             .first()
         )
-        
+
         if existing_category:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Category '{normalized_name}' already exists"
+                status_code=400, detail=f"Category '{normalized_name}' already exists"
             )
-        
+
         # Create new category
-        new_category = Category(
-            name=normalized_name,
-            user_id=current_user.id
-        )
-        
+        new_category = Category(name=normalized_name, user_id=current_user.id)
+
         # Add and commit the category
         db.add(new_category)
         db.commit()
         db.refresh(new_category)
-        
-        return {
-            "message": "Category created successfully", 
-            "category": normalized_name
-        }
-    
+
+        return CategoryResponse(
+            id=new_category.id, name=new_category.name, user_id=new_category.user_id
+        )
+
     except IntegrityError:
         # Rollback in case of database integrity error
         db.rollback()
         raise HTTPException(
-            status_code=500, 
-            detail="Error creating category. Please try again."
+            status_code=500, detail="Error creating category. Please try again."
         )
     except Exception as e:
         # Rollback for any other unexpected errors
         db.rollback()
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Unexpected error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 @router.get("/", response_model=PaginatedTransactions)
@@ -217,13 +243,20 @@ def get_transactions(
     offset = (page - 1) * page_size
 
     transactions = (
-        db.query(Transaction)
+        db.query(Transaction, Category)
+        .join(Category, Transaction.category == Category.id)
         .filter(Transaction.user_id == current_user.id)
         .order_by(desc(Transaction.operation_date))
         .offset(offset)
         .limit(page_size)
         .all()
     )
+
+    # Transform the query results to match the response model
+    transactions_with_category = [
+        {**transaction.__dict__, "category": category.__dict__}
+        for transaction, category in transactions
+    ]
 
     total_transactions = (
         db.query(func.count(Transaction.id))
@@ -234,7 +267,7 @@ def get_transactions(
     total_pages = (total_transactions + page_size - 1) // page_size
 
     return {
-        "transactions": transactions,
+        "transactions": transactions_with_category,
         "page": page,
         "page_size": page_size,
         "total_transactions": total_transactions,
@@ -242,9 +275,9 @@ def get_transactions(
     }
 
 
-@router.post("/", response_model=TransactionBase)
+@router.post("/", response_model=TransactionResponse)
 def create_transaction(
-    transaction: TransactionCreate,
+    transaction_data: TransactionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -252,18 +285,35 @@ def create_transaction(
     Create a new transaction for the current user.
 
     - Validates the transaction data
-    - Assigns the transaction to the current user
+    - Creates a new category if it doesn't exist
     - Saves the transaction to the database
     """
     try:
-        amount = Decimal(transaction.amount).quantize(
+        amount = Decimal(transaction_data.amount).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
+        normalized_name = transaction_data.category.strip().title()
+
+        category = (
+            db.query(Category)
+            .filter(
+                Category.name.ilike(normalized_name),
+                Category.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not category:
+            category = Category(name=normalized_name, user_id=current_user.id)
+            db.add(category)
+            db.commit()
+            db.refresh(category)
+
         new_transaction = Transaction(
-            operation_date=transaction.operation_date,
-            description=transaction.description,
-            category=transaction.category,
+            operation_date=transaction_data.operation_date,
+            description=transaction_data.description,
+            category=category.id,
             amount=amount,
             user_id=current_user.id,
         )
@@ -272,7 +322,19 @@ def create_transaction(
         db.commit()
         db.refresh(new_transaction)
 
-        return new_transaction
+        # Create the response with full category details
+        transaction_response = TransactionResponse(
+            id=new_transaction.id,
+            operation_date=new_transaction.operation_date,
+            description=new_transaction.description,
+            category=CategoryInTransaction(
+                id=category.id, name=category.name, user_id=category.user_id
+            ),
+            amount=new_transaction.amount,
+            user_id=new_transaction.user_id,
+        )
+
+        return transaction_response
 
     except Exception as e:
         db.rollback()
@@ -281,7 +343,7 @@ def create_transaction(
         )
 
 
-@router.delete("/{transaction_id}", response_model=dict)
+@router.delete("/{transaction_id}", status_code=204)
 def delete_transaction(
     transaction_id: int,
     db: Session = Depends(get_db),
@@ -293,12 +355,14 @@ def delete_transaction(
     - Checks if the transaction exists
     - Verifies the transaction belongs to the current user
     - Deletes the transaction from the database
+    - Returns 204 No Content on successful deletion
     """
 
     transaction = (
         db.query(Transaction)
         .filter(
-            Transaction.id == transaction_id, Transaction.user_id == current_user.id
+            Transaction.id == transaction_id,
+            Transaction.user_id == current_user.id,
         )
         .first()
     )
@@ -311,5 +375,3 @@ def delete_transaction(
 
     db.delete(transaction)
     db.commit()
-
-    return {"message": "Transaction deleted successfully"}

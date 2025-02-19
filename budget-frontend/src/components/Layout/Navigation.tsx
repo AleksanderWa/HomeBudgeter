@@ -60,45 +60,6 @@ export default function Navigation() {
     setFormErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  const createNewCategory = async (categoryName: string) => {
-    try {
-      // Send request to create new category
-      const response = await api.post('/transactions/categories', { name: categoryName });
-      
-      // Add the new category to the existing categories list
-      setCategories(prevCategories => {
-        // Ensure no duplicates
-        if (!prevCategories.includes(response.data.category)) {
-          return [...prevCategories, response.data.category];
-        }
-        return prevCategories;
-      });
-
-      // Set the newly created category as the selected category
-      setNewTransaction(prev => ({
-        ...prev,
-        category: response.data.category
-      }));
-
-      // Reset category query
-      setCategoryQuery('');
-    } catch (error: any) {
-      // Check for 401 Unauthorized error
-      if (error.response && error.response.status === 401) {
-        logout();
-        navigate('/login', { 
-          state: { 
-            message: 'Your session has expired. Please log in again.' 
-          } 
-        });
-        return;
-      }
-
-      console.error('Error creating category:', error);
-      alert('Failed to create category. Please try again.');
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -114,11 +75,6 @@ export default function Navigation() {
 
     if (!newTransaction.description.trim()) {
       errors.description = 'Description is required';
-    }
-
-    // If category doesn't exist in the list, create it
-    if (!categories.includes(newTransaction.category.trim())) {
-      await createNewCategory(newTransaction.category.trim());
     }
 
     if (!newTransaction.category.trim()) {
@@ -143,13 +99,21 @@ export default function Navigation() {
         description: newTransaction.description,
         category: newTransaction.category,
         amount: -Math.abs(parseFloat(newTransaction.amount)), // Negative for expenses
-        account: 'default' // Default account, can be modified later
       };
 
-      // Send transaction to backend
-      const response = await api.post('/transactions/', transactionData);
+      // Create the transaction
+      await api.post('/transactions', transactionData);
 
-      // Reset form and close modal on successful submission
+      // Fetch updated transactions 
+      const transactionsResponse = await api.get('/transactions?page=1&page_size=100');
+      
+      // Dispatch a custom event to update transactions in parent components
+      const event = new CustomEvent('transactionsUpdated', { 
+        detail: { transactions: transactionsResponse.data.transactions } 
+      });
+      window.dispatchEvent(event);
+
+      // Reset form and close modal
       setNewTransaction({
         operation_date: new Date(),
         description: '',
@@ -158,23 +122,9 @@ export default function Navigation() {
         newCategory: ''
       });
       setIsModalOpen(false);
-
-    } catch (error: any) {
-      // Check for 401 Unauthorized error
-      if (error.response && error.response.status === 401) {
-        // Logout the user and redirect to login page
-        logout();
-        navigate('/login', { 
-          state: { 
-            message: 'Your session has expired. Please log in again.' 
-          } 
-        });
-        return;
-      }
-
-      console.error('Error adding transaction:', error);
-      // Handle other types of errors
-      alert('Failed to add transaction. Please try again.');
+    } catch (error) {
+      console.error('Failed to create transaction', error);
+      // Optionally, show an error message to the user
     }
   };
 
@@ -197,6 +147,9 @@ export default function Navigation() {
               </Link>
               <Link to="/upload" className="text-gray-700 hover:text-gray-900 px-3 py-2">
                 Upload
+              </Link>
+              <Link to="/planning" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+                Planning
               </Link>
               <button
                 onClick={logout}
@@ -276,7 +229,7 @@ export default function Navigation() {
                     <Combobox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm border border-blue-200">
                       {filteredCategories.length === 0 && categoryQuery !== '' ? (
                         <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
-                          No categories found. Press Enter to add "{categoryQuery}" as a new category.
+                          No categories found. Put value and it will be created as new category.
                         </div>
                       ) : (
                         filteredCategories.map((category) => (

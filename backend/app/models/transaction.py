@@ -44,6 +44,7 @@ class CategoryLimit(Base):
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     plan_id = Column(Integer, ForeignKey('plans.id'), nullable=False)
+    limit = Column(DECIMAL(precision=10, scale=2), nullable=False)
 
     __table_args__ = (
         UniqueConstraint('category_id', 'plan_id', name='_category_plan_uc'),

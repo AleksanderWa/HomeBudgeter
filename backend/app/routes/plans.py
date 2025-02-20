@@ -59,28 +59,45 @@ async def get_plans(
     return [PlanResponse(id=plan.id, month=plan.month, year=plan.year, user_id=plan.user_id) for plan in plans]
 
 
-@router.post("/category_limits/", response_model=CategoryLimitResponse)
-async def create_category_limit(
+@router.put("/category_limits/", response_model=CategoryLimitResponse)
+async def update_category_limit(
     category_limit: CreateCategoryLimit,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    db_category_limit = CategoryLimit(
-        **category_limit.model_dump(),
-        user_id=current_user.id,
-    )
-    db.add(db_category_limit)
+    # Find the existing category limit
+    db_category_limit = db.query(CategoryLimit).filter(
+        CategoryLimit.category_id == category_limit.category_id,
+        CategoryLimit.user_id == current_user.id,
+        CategoryLimit.plan_id == category_limit.plan_id
+    ).first()
+
+    if db_category_limit:
+        # Update the existing limit
+        db_category_limit.limit = category_limit.limit
+    else:
+        # Create a new category limit
+        db_category_limit = CategoryLimit(
+            category_id=category_limit.category_id,
+            user_id=current_user.id,
+            plan_id=category_limit.plan_id,
+            limit=category_limit.limit
+        )
+        db.add(db_category_limit)
+
     db.commit()
     db.refresh(db_category_limit)
+
     return CategoryLimitResponse(
         id=db_category_limit.id,
         category_id=db_category_limit.category_id,
         user_id=db_category_limit.user_id,
         plan_id=db_category_limit.plan_id,
+        limit=db_category_limit.limit,
     )
 
 
-@router.get("/category_limits/", response_model=List[CategoryLimitResponse])
+@router.get("/{plan_id}/category_limits/", response_model=List[CategoryLimitResponse])
 async def get_category_limits(
     plan_id: int,
     db: Session = Depends(get_db),
@@ -91,9 +108,16 @@ async def get_category_limits(
         .filter(
             CategoryLimit.user_id == current_user.id, CategoryLimit.plan_id == plan_id
         )
+        .join(Category, CategoryLimit.category_id == Category.id)
         .all()
     )
     return [
-        CategoryLimitResponse(**category_limit.model_dump())
+        CategoryLimitResponse(
+            id=category_limit.id,
+            category_id=category_limit.category.id,
+            user_id=category_limit.user_id,
+            plan_id=category_limit.plan_id,
+            limit=category_limit.limit,
+        )
         for category_limit in category_limits
     ]

@@ -239,6 +239,7 @@ class CreatePlan(BaseModel):
 class CreateCategoryLimit(BaseModel):
     category_id: int
     plan_id: int
+    limit: Decimal
 
 
 class PlanResponse(BaseModel):
@@ -253,3 +254,11 @@ class CategoryLimitResponse(BaseModel):
     category_id: int
     user_id: int
     plan_id: int
+    limit: Decimal
+
+
+class TransactionSummaryResponse(BaseModel):
+    category_id: int
+    category_name: str
+    expenses: float
+    month: int

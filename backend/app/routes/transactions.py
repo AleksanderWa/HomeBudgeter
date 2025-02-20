@@ -19,10 +19,11 @@ from backend.app.schemas.schemas import (
     CreateCategoryLimit,
     PlanResponse,
     CategoryLimitResponse,
+    TransactionSummaryResponse,
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, extract
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -149,7 +150,8 @@ def get_summary(
 
 @router.get("/categories", response_model=dict)
 def get_transaction_categories(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+    only_names: bool = False
 ):
     """
     Retrieve unique transaction categories for the current user.
@@ -157,7 +159,7 @@ def get_transaction_categories(
     Returns a list of unique category names sorted alphabetically.
     """
     categories = (
-        db.query(Category.name)
+        db.query(Category)
         .filter(Category.user_id == current_user.id)
         .distinct()
         .order_by(Category.name)
@@ -165,8 +167,16 @@ def get_transaction_categories(
     )
 
     # unique_categories = [cat[0] for cat in categories if cat[0] and cat[0].strip()]
-
-    return {"categories": set([cat[0] for cat in categories])}
+    if only_names:
+        return {"categories": set([cat.name for cat in categories])}
+    else:
+        return {"categories": [
+            CategoryResponse(
+                id=category.id,
+                name=category.name,
+                user_id=category.user_id
+            ) for category in categories
+        ]}
 
 
 @router.post("/categories", response_model=dict)
@@ -375,3 +385,37 @@ def delete_transaction(
 
     db.delete(transaction)
     db.commit()
+
+
+@router.get("/expenses_summary/", response_model=List[TransactionSummaryResponse])
+async def get_expenses_summary(month: int, db: Session = Depends(get_db)):
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=400, detail="Month must be between 1 and 12.")
+
+    current_year = datetime.now().year  # Get the current year
+
+    # Query to summarize expenses per category for the current year
+    summary = (
+        db.query(
+            Category.id,
+            Category.name,
+            func.sum(Transaction.amount).label('expenses'),  # Sum of expenses
+        )
+        .join(Category, Transaction.category == Category.id)
+        .filter(
+            extract('year', Transaction.operation_date) == current_year,
+            extract('month', Transaction.operation_date) == month  # Filter by current year and month
+        )
+        .group_by(Category.id, Category.name)  # Group by category fields only
+        .all()
+    )
+
+    return [
+        TransactionSummaryResponse(
+            category_id=item[0],
+            category_name=item[1],
+            expenses=abs(item[2]),
+            month=month
+        )
+        for item in summary
+    ]

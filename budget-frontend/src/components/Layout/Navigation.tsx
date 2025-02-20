@@ -30,7 +30,7 @@ export default function Navigation() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get('/transactions/categories');
+        const response = await api.get('/transactions/categories?only_names=true');
         setCategories(response.data.categories);
       } catch (error) {
         console.error('Failed to fetch categories', error);

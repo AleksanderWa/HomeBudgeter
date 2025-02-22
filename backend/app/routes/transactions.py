@@ -20,6 +20,7 @@ from backend.app.schemas.schemas import (
     PlanResponse,
     CategoryLimitResponse,
     TransactionSummaryResponse,
+    TransactionEdit
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -298,59 +299,119 @@ def create_transaction(
     - Creates a new category if it doesn't exist
     - Saves the transaction to the database
     """
-    try:
-        amount = Decimal(transaction_data.amount).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+    amount = Decimal(transaction_data.amount).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+    category = (
+        db.query(Category)
+        .filter(
+            func.lower(Category.name) == transaction_data.category.lower(),
+            Category.user_id == current_user.id,
         )
+        .first()
+    )
 
-        normalized_name = transaction_data.category.strip().title()
-
-        category = (
-            db.query(Category)
-            .filter(
-                Category.name.ilike(normalized_name),
-                Category.user_id == current_user.id,
-            )
-            .first()
-        )
-
-        if not category:
-            category = Category(name=normalized_name, user_id=current_user.id)
-            db.add(category)
-            db.commit()
-            db.refresh(category)
-
-        new_transaction = Transaction(
-            operation_date=transaction_data.operation_date,
-            description=transaction_data.description,
-            category=category.id,
-            amount=amount,
-            user_id=current_user.id,
-        )
-
-        db.add(new_transaction)
+    if not category:
+        category = Category(name=transaction_data.category, user_id=current_user.id)
+        db.add(category)
         db.commit()
-        db.refresh(new_transaction)
+        db.refresh(category)
 
-        # Create the response with full category details
-        transaction_response = TransactionResponse(
-            id=new_transaction.id,
-            operation_date=new_transaction.operation_date,
-            description=new_transaction.description,
-            category=CategoryInTransaction(
-                id=category.id, name=category.name, user_id=category.user_id
-            ),
-            amount=new_transaction.amount,
-            user_id=new_transaction.user_id,
+    new_transaction = Transaction(
+        operation_date=transaction_data.operation_date,
+        description=transaction_data.description,
+        category=category.id,
+        amount=amount,
+        user_id=current_user.id,
+    )
+
+    db.add(new_transaction)
+    db.commit()
+    db.refresh(new_transaction)
+
+    # Create the response with full category details
+    transaction_response = TransactionResponse(
+        id=new_transaction.id,
+        operation_date=new_transaction.operation_date,
+        description=new_transaction.description,
+        category=CategoryInTransaction(
+            id=category.id, name=category.name, user_id=category.user_id
+        ),
+        amount=new_transaction.amount,
+        user_id=new_transaction.user_id,
+    )
+
+    return transaction_response
+
+
+@router.put("/{transaction_id}", response_model=TransactionResponse)
+async def edit_transaction(
+    transaction_id: int, transaction_data: TransactionEdit,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """
+    Edit a transaction for the current user.
+
+    - Checks if the transaction exists
+    - Verifies the transaction belongs to the current user
+    - Updates the transaction in the database
+    - Returns the updated transaction
+    """
+
+    transaction = (
+        db.query(Transaction)
+        .filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == current_user.id,
         )
+        .first()
+    )
 
-        return transaction_response
-
-    except Exception as e:
-        db.rollback()
+    if not transaction:
         raise HTTPException(
-            status_code=400, detail=f"Error creating transaction: {str(e)}"
+            status_code=404,
+            detail="Transaction not found or you do not have permission to edit it",
         )
+
+    amount = Decimal(transaction_data.amount).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+    category = (
+        db.query(Category)
+        .filter(
+            Category.name.ilike(transaction_data.category_name),
+            Category.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not category:
+        raise HTTPException(
+            status_code=400,
+            detail="Category not found or you do not have permission to edit it",
+        )
+
+    transaction.operation_date = transaction_data.operation_date
+    transaction.description = transaction_data.description
+    transaction.category = category.id
+    transaction.amount = amount
+
+    db.commit()
+    db.refresh(transaction)
+
+    return TransactionResponse(
+        id=transaction.id,
+        user_id=transaction.user_id,
+        operation_date=transaction.operation_date,
+        description=transaction.description,
+        category=CategoryInTransaction(
+            id=category.id, name=category.name, user_id=category.user_id
+        ),
+        amount=transaction.amount,
+    )
 
 
 @router.delete("/{transaction_id}", status_code=204)

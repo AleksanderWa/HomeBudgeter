@@ -50,7 +50,6 @@ class CategoryInTransaction(BaseModel):
 class TransactionBase(BaseModel):
     operation_date: Union[datetime, date]
     description: str
-    # account: str
     category: CategoryInTransaction
     amount: Decimal = Field(..., decimal_places=2)
 
@@ -138,6 +137,14 @@ class TransactionCreate(BaseModel):
                 "account": "default",
             }
         }
+
+
+class TransactionEdit(BaseModel):
+    amount: float
+    description: Optional[str] = None
+    operation_date: Optional[datetime] = None
+    category_name: Optional[str] = None
+    user_id: int
 
 
 class TransactionResponse(TransactionBase):

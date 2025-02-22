@@ -24,6 +24,10 @@ class Category(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     category_limits = relationship('CategoryLimit', back_populates='category')
 
+    __table_args__ = (
+        UniqueConstraint('name', 'user_id', name='_category_name_user_uc'),
+    )
+
 
 class Plan(Base):
     __tablename__ = 'plans'

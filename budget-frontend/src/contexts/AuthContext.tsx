@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 interface User {
   id: number;
@@ -20,6 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check for token when the app loads
@@ -42,6 +44,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthenticated(true);
           setUser(response.data);  // Assuming the backend returns user info
         } catch (error) {
+          if (error.response && error.response.status === 401) {
+            navigate('/login'); // Redirect to login page
+          }
           console.error('Token validation failed:', error);
           
           // If token is invalid, clear it

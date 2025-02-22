@@ -172,7 +172,13 @@ export default function Navigation() {
       {/* Transaction Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white p-8 rounded-lg w-[500px] shadow-xl">
+          <div className="bg-white p-8 rounded-lg w-[500px] shadow-xl relative">
+            <button
+    className="absolute top-0 right-0 text-gray-500 hover:text-gray-800 text-xl p-3"
+    onClick={() => setIsModalOpen(false)}
+            >
+              &times;
+            </button>
             <h2 className="text-xl font-bold mb-6 text-center">Add New Transaction</h2>
             <form onSubmit={handleSubmit}>
               <div className="mb-6">
@@ -226,8 +232,8 @@ export default function Navigation() {
                         />
                       </Combobox.Button>
                     </div>
-                    <Combobox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm border border-blue-200">
-                      {filteredCategories.length === 0 && categoryQuery !== '' ? (
+                    <Combobox.Options className="absolute mt-1 max-h-96 overflow-y-auto w-full rounded-lg bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm border border-blue-200">
+                    {filteredCategories.length === 0 && categoryQuery !== '' ? (
                         <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
                           No categories found. Put value and it will be created as new category.
                         </div>

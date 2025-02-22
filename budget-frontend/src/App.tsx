@@ -62,7 +62,7 @@ const AppContent: React.FC = () => {
       {isAuthenticated && <MobileNav />}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center">
-          &copy; 2023 Budget Tracker. All rights reserved.
+          &copy; 2025 Budget Tracker by Aleksander Walkowski. All rights reserved.
         </div>
       </footer>
     </div>
@@ -75,11 +75,11 @@ interface AuthProviderProps {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <AppContent />
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   )
 }
 

@@ -8,10 +8,14 @@ const Planning = () => {
     const [categories, setCategories] = useState([]);
     const [expensesData, setExpensesData] = useState([]); 
     const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+    const [selectedCategoryName, setSelectedCategoryName] = useState(null);
     const [limit, setLimit] = useState('');
     const [plans, setPlans] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedPlanId, setSelectedPlanId] = useState(null);
+
+    const today = new Date();
+    const formattedDate = `${today.getDate()} / ${today.getMonth() + 1} / ${today.getFullYear()}`;
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -32,6 +36,7 @@ const Planning = () => {
                 const selectedPlan = response.data.find(plan => plan.month === selectedMonth);
                 if (selectedPlan) {
                     setSelectedPlanId(selectedPlan.id);
+                    // Fetch category limits for the selected plan
                     const limitsResponse = await api.get(`/plans/${selectedPlan.id}/category_limits`);
                     const limits = limitsResponse.data.reduce((acc, limit) => {
                         acc[limit.category_id] = limit.limit;
@@ -59,11 +64,12 @@ const Planning = () => {
 
         fetchCategories();
         fetchPlans();
-        fetchExpenses(); 
-    }, [selectedMonth]);
+        fetchExpenses();
+    }, [selectedMonth]); // Fetch data when selectedMonth changes
 
     const openModal = (category) => {
         setSelectedCategoryId(category.id);
+        setSelectedCategoryName(category.name);
         setLimit(budgetLimits[category.id] || '');
         setIsModalOpen(true);
     };
@@ -118,7 +124,7 @@ const Planning = () => {
             setSelectedPlanId(null);
         }
     };
-
+    
     return (
         <div className="container mx-auto p-4">
             {plans.length === 0 ? (
@@ -131,11 +137,12 @@ const Planning = () => {
             ) : (
                 <>
                     <h1 className="text-2xl font-bold mb-6">Budget Planning</h1>
+                    <p className="text-lg text-gray-600 mb-6">{formattedDate}</p>
                     <label className="block mb-4">
                         Select Month:
                         <select
                             value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(e.target.value)}
+                            onChange={handleMonthChange}
                             className="mt-2 p-2 border rounded w-full md:w-64"
                         >
                             <option value="">--Select Month--</option>
@@ -190,7 +197,7 @@ const Planning = () => {
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
                             <div className="bg-white p-8 rounded-lg w-[500px] shadow-xl">
-                                <h2 className="text-xl font-bold mb-6 text-center">Set Budget Limit for {selectedCategoryId}</h2>
+                                <h2 className="text-xl font-bold mb-6 text-center">Set Budget Limit for {selectedCategoryName} in <span className="text-blue-500">{['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][selectedMonth - 1]}</span></h2>
                                 <div className="mb-6">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Limit Amount</label>
                                     <input

@@ -1,11 +1,12 @@
 // components/Dashboard/ExpenseList.tsx
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon } from '@heroicons/react/24/outline';
 import useExpenses from '../../hooks/useExpenses.ts';
 import axios from 'axios';
+import api from '../../client/api/client.ts';
 
 interface ExpenseListProps {
   expenses?: any[];
@@ -26,6 +27,8 @@ const transitionStyles = {
     transform: 'translateX(-100%)',
   },
 };
+
+const categories = []; // Initialize categories as an empty array
 
 export default function ExpenseList({ 
   expenses: propExpenses, 
@@ -51,6 +54,23 @@ export default function ExpenseList({
   const [selectedTransactionId, setSelectedTransactionId] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletedTransactionIds, setDeletedTransactionIds] = useState<string[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editedTransaction, setEditedTransaction] = useState<any>({
+    amount: 0,
+  });
+
+  // Fetch categories from the API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await api.get('/transactions/categories?only_names=true');
+        categories.push(...response.data.categories);
+      } catch (error) {
+        console.error('Failed to fetch categories', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const filteredExpenses = useMemo(() => {
     if (loading || error) return [];
@@ -89,6 +109,48 @@ export default function ExpenseList({
       // Remove from deleted transactions if API call fails
       setDeletedTransactionIds(prev => prev.filter(id => id !== selectedTransactionId));
     }
+  };
+
+  const handleEdit = (index: number) => {
+    setEditingIndex(index);
+    setEditedTransaction({
+      ...filteredExpenses[index],
+      amount: filteredExpenses[index].amount,
+    });
+  };
+
+  const handleSave = async (index: number) => {
+    const payload = {
+      ...editedTransaction,
+      category_name: editedTransaction.category.name,
+    };
+    delete payload.category;
+    delete payload.id;
+    try {
+      await axios.put(`/api/transactions/${filteredExpenses[index].id}`, payload);
+      setLocalExpenses(localExpenses.map((expense, i) => i === index ? editedTransaction : expense));
+      setEditingIndex(null);
+    } catch (error) {
+      console.error('Failed to save transaction', error);
+    }
+  };
+
+  const handleChange = (index: number, value: string) => {
+    const updatedTransactions = [...localExpenses];
+    updatedTransactions[index].description = value; 
+    setLocalExpenses(updatedTransactions);
+    setEditedTransaction(updatedTransactions[index]);
+  };
+
+  const handleCategoryChange = (index: number, category: string) => {
+    const updatedTransactions = [...localExpenses];
+    updatedTransactions[index].category = { name: category }; 
+    setLocalExpenses(updatedTransactions);
+    setEditedTransaction(updatedTransactions[index]);
+  };
+
+  const handleAmountChange = (value: string) => {
+    setEditedTransaction({ ...editedTransaction, amount: parseFloat(value) });
   };
 
   if (loading) {
@@ -159,7 +221,7 @@ export default function ExpenseList({
               </tr>
             </thead>
             <tbody>
-              {filteredExpenses.map(expense => (
+              {filteredExpenses.map((expense, index) => (
                 <tr 
                   key={expense.id}
                   className={`border-b hover:bg-gray-50 transition-all duration-700 ease-in-out 
@@ -173,25 +235,65 @@ export default function ExpenseList({
                   }}
                 >
                   <td className="p-2 text-sm">{new Date(expense.operation_date).toLocaleDateString()}</td>
-                  <td className="p-2 text-sm break-words whitespace-normal max-w-xs">{expense.description}</td>
+                  <td className="p-2 text-sm break-words whitespace-normal max-w-xs">
+                    {editingIndex === index ? (
+                      <input
+                        type="text"
+                        value={expense.description}
+                        onChange={(e) => handleChange(index, e.target.value)}
+                        className="border p-2 w-full"
+                      />
+                    ) : (
+                      expense.description
+                    )}
+                  </td>
                   <td className="p-2">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                      {expense.category.name}
-                    </span>
+                    {editingIndex === index ? (
+                      <select
+                        value={expense.category.name}
+                        onChange={(e) => handleCategoryChange(index, e.target.value)}
+                        className="border p-2 w-full"
+                      >
+                        {categories.map((category) => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        {expense.category.name}
+                      </span>
+                    )}
                   </td>
                   <td className={`p-2 text-right text-sm ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    {editingIndex === index ? (
+                      <input
+                        type="number"
+                        value={editedTransaction.amount}
+                        onChange={(e) => handleAmountChange(e.target.value)}
+                        className="border p-2 w-full"
+                      />
+                    ) : (
+                      expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                    )}
                   </td>
                   <td className="p-2 text-right">
-                    <button 
-                      onClick={() => {
+                    {editingIndex === index ? (
+                      <button onClick={() => handleSave(index)}>
+                        <CheckIcon className="w-5 h-5 text-green-500" />
+                      </button>
+                    ) : (
+                      <button onClick={() => handleEdit(index)}>
+                        <PencilIcon className="w-5 h-5 text-blue-500 mr-2" />
+                      </button>
+                    )}
+                    {editingIndex !== index && (
+                      <button onClick={() => {
                         setSelectedTransactionId(expense.id);
                         setDeleteModalOpen(true);
-                      }}
-                      className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100 transition-colors"
-                    >
-                      <TrashIcon className="w-5 h-5" />
-                    </button>
+                      }}>
+                        <TrashIcon className="w-5 h-5 text-red-500" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

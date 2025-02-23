@@ -162,11 +162,13 @@ const Planning = () => {
                         {categories.map((category) => {
                             const limit = budgetLimits[category.id] || 0;
                             const spentAmount = spentAmounts[category.id] || 0;
-                            const progress = (spentAmount / limit) * 100;
+                            const progress = Math.min((spentAmount / limit) * 100, 100);
                             let progressColor = 'text-blue-500';
 
                             // Determine color based on progress
-                            if (progress <= 50) {
+                            if (progress > 100) {
+                                progressColor = 'text-black';
+                            } else if (progress <= 50) {
                                 progressColor = 'text-green-500';
                             } else if (progress <= 75) {
                                 progressColor = 'text-yellow-500';
@@ -180,10 +182,10 @@ const Planning = () => {
                                     <div className="relative w-32 h-32 mx-auto mb-4">
                                         <svg className="w-full h-full" viewBox="0 0 100 100">
                                             <circle className="text-gray-200" strokeWidth="8" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
-                                            <circle className={`${progressColor}`} strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * (progress / 100))} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                                            <circle className={`${progressColor}`} strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * (Math.min(progress, 100) / 100))} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
                                         </svg>
                                         <div className="absolute inset-0 flex items-center justify-center">
-                                            <span className="text-2xl font-bold text-gray-700">{Math.round(progress)}%</span>
+                                            <span className="text-2xl font-bold text-gray-700">{Math.round((spentAmount / limit) * 100)}%</span>
                                         </div>
                                     </div>
                                     <div className="text-center">

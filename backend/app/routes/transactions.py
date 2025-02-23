@@ -195,13 +195,13 @@ def create_category(
     """
     try:
         # Normalize category name (strip whitespace, convert to title case)
-        normalized_name = category_data.name.strip().title()
+        normalized_name = category_data.name.replace(' ', '').lower()
 
         # Check if category already exists for this user
         existing_category = (
             db.query(Category)
             .filter(
-                Category.name.ilike(normalized_name),
+                func.lower(func.replace(Category.name, ' ', '')) == normalized_name,
                 Category.user_id == current_user.id,
             )
             .first()
@@ -303,11 +303,11 @@ def create_transaction(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
 
-
+    sanitized_name = transaction_data.category.lower().replace(' ', '')
     category = (
         db.query(Category)
         .filter(
-            func.lower(Category.name) == transaction_data.category.lower(),
+            func.lower(func.replace(Category.name, ' ', '')) == sanitized_name,
             Category.user_id == current_user.id,
         )
         .first()

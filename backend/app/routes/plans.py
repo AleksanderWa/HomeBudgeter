@@ -131,9 +131,6 @@ async def create_category_limit(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if category_limit.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail='Not authorized to create this limit')
-    
     db_category_limit = (
         db.query(CategoryLimit)
         .filter(
@@ -149,13 +146,20 @@ async def create_category_limit(
     db_category_limit = CategoryLimit(
         plan_id=plan_id,
         category_id=category_limit.category_id,
-        user_id=category_limit.user_id,
+        user_id=current_user.id,
         limit=category_limit.limit,
     )
     db.add(db_category_limit)
     db.commit()
     db.refresh(db_category_limit)
-    return db_category_limit
+
+    return CategoryLimitResponse(
+        id=db_category_limit.id,
+        plan_id=db_category_limit.plan_id,
+        category_id=db_category_limit.category_id,
+        user_id=current_user.id,
+        limit=db_category_limit.limit,
+    )
 
 
 @router.delete("/{plan_id}/categories/{category_id}", status_code=204)

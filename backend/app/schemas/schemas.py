@@ -261,7 +261,7 @@ class CategoryLimitResponse(BaseModel):
     category_id: int
     user_id: int
     plan_id: int
-    limit: Decimal
+    limit: float
 
 
 class TransactionSummaryResponse(BaseModel):
@@ -284,5 +284,4 @@ class CategoryEdit(BaseModel):
 
 class CategoryLimitCreate(BaseModel):
     category_id: int
-    user_id: int
     limit: float

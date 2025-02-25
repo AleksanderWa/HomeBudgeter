@@ -24,6 +24,7 @@ const Planning = () => {
     const [isDeleteConfirmationModalOpen, setIsDeleteConfirmationModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
     const [query, setQuery] = useState('');
+    const [limitValue, setLimitValue] = useState('');
 
     const today = new Date();
     const formattedDate = `${today.getDate()} / ${today.getMonth() + 1} / ${today.getFullYear()}`;
@@ -56,6 +57,7 @@ const Planning = () => {
                         return acc;
                     }, {});
                     setBudgetLimits(limits);
+                    console.log('Budget limits:', limits)
                 }
             }
         };
@@ -148,22 +150,33 @@ const Planning = () => {
     };
 
     const handleAddLimit = async () => {
-        if (!selectedCategory) return;
-        const limitValue = parseFloat((document.querySelector('input[type="number"]') as HTMLInputElement).value);
-        if (isNaN(limitValue)) {
-            alert('Please enter a valid limit value');
+        if (!selectedCategory || !limitValue) {
+            alert('Please select a category and enter a limit value.');
             return;
         }
+
         try {
-            await api.post('/plans/category_limits', {
+            const response = await api.post(`/plans/${selectedPlanId}/category_limits`, {
                 category_id: selectedCategory.id,
-                limit: limitValue,
+                limit: parseFloat(limitValue),
             });
-            // Refresh the category limits
-            fetchCategories(selectedMonth);
+
+            // Fetch updated category limits
+            const updatedLimits = await api.get(`/plans/${selectedPlanId}/category_limits`);
+            const formattedLimits = updatedLimits.data.reduce((acc: any, limit: any) => {
+                acc[limit.category_id] = limit.limit; 
+                return acc;
+            }, {});
+
+            setBudgetLimits(formattedLimits);
+
+            // Reset modal state
+            setSelectedCategory(null);
+            setLimitValue('');
             setIsAddLimitModalOpen(false);
         } catch (error) {
-            console.error('Failed to add category limit', error);
+            console.error('Error adding category limit:', error);
+            alert('Failed to add category limit. Please try again.');
         }
     };
 
@@ -237,7 +250,7 @@ const Planning = () => {
                                                 <div className="bg-blue-500 h-2 rounded" style={{ width: `${Math.min(progress, 100)}%` }}></div>
                                             </div>
                                         </div>
-                                        <span className="text-gray-600">{spentAmount} of {limit}</span>
+                                        <p className='text-sm text-gray-600'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
                                         <button
                                             onClick={(event) => {
                                                 event.stopPropagation();
@@ -285,7 +298,7 @@ const Planning = () => {
                                             </div>
                                         </div>
                                         <div className="text-center">
-                                            <p className="text-sm text-gray-600">{spentAmount} / {limit.toLocaleString()}</p>
+                                            <p className='text-sm text-gray-600'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
                                             <span className="text-xs text-gray-500">of limit</span>
                                         </div>
                                         <button
@@ -344,6 +357,8 @@ const Planning = () => {
                                     <label className='block text-sm font-medium mb-1'>Limit Value</label>
                                     <input
                                         type='number'
+                                        value={limitValue}
+                                        onChange={(e) => setLimitValue(e.target.value)}
                                         placeholder='Enter limit value'
                                         className='w-full p-2 border rounded-md'
                                     />

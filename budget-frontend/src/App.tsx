@@ -12,6 +12,7 @@ import { useAuth } from './contexts/AuthContext.tsx'
 import ExpenseList from './components/Dashboard/ExpenseList.tsx'
 import Upload from './components/Upload/Upload.tsx'
 import Planning from './components/Planning/Planning.tsx' // Added import statement
+import Category from './components/Category/Category.tsx' // Added import statement
 import axios from 'axios'
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
@@ -56,6 +57,7 @@ const AppContent: React.FC = () => {
             <Route path="/list" element={<ExpenseList />} />
             <Route path="/upload" element={<Upload />} />
             <Route path="/planning" element={<Planning />} /> // Added route
+            <Route path="/category" element={<Category />} /> // Added route
           </Route>
         </Routes>
       </main>

@@ -20,7 +20,9 @@ from backend.app.schemas.schemas import (
     PlanResponse,
     CategoryLimitResponse,
     TransactionSummaryResponse,
-    TransactionEdit
+    TransactionEdit,
+    DashboardResponse,
+    CategoryEdit
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -178,6 +180,23 @@ def get_transaction_categories(
                 user_id=category.user_id
             ) for category in categories
         ]}
+
+
+@router.patch("/categories/{category_id}", response_model=CategoryResponse)
+async def update_category(
+    category_id: int,
+    category_edit: CategoryEdit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_category = db.query(Category).filter(Category.id == category_id, Category.user_id == current_user.id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    db_category.name = category_edit.name
+    db.commit()
+    db.refresh(db_category)
+    return db_category
 
 
 @router.post("/categories", response_model=dict)
@@ -448,35 +467,65 @@ def delete_transaction(
     db.commit()
 
 
-@router.get("/expenses_summary/", response_model=List[TransactionSummaryResponse])
-async def get_expenses_summary(month: int, db: Session = Depends(get_db)):
-    if month < 1 or month > 12:
-        raise HTTPException(status_code=400, detail="Month must be between 1 and 12.")
-
-    current_year = datetime.now().year  # Get the current year
-
-    # Query to summarize expenses per category for the current year
+def _get_expenses_summary_data(month: int, db: Session):
     summary = (
         db.query(
-            Category.id,
+            Transaction.category,
             Category.name,
-            func.sum(Transaction.amount).label('expenses'),  # Sum of expenses
+            func.sum(Transaction.amount).label('amount')
         )
         .join(Category, Transaction.category == Category.id)
-        .filter(
-            extract('year', Transaction.operation_date) == current_year,
-            extract('month', Transaction.operation_date) == month  # Filter by current year and month
-        )
-        .group_by(Category.id, Category.name)  # Group by category fields only
+        .filter(extract('month', Transaction.operation_date) == month)
+        .group_by(Transaction.category, Category.name)
         .all()
     )
 
-    return [
-        TransactionSummaryResponse(
-            category_id=item[0],
-            category_name=item[1],
-            expenses=abs(item[2]),
-            month=month
-        )
-        for item in summary
-    ]
+    categories = db.query(Category).all()
+    limits = db.query(CategoryLimit).filter(CategoryLimit.category_id.in_([category.id for category in categories])).all()
+    limits_dict = {limit.category_id: limit.limit for limit in limits}
+
+    response_data = []
+    for category in categories:
+        expenses = abs(sum(item[2] for item in summary if item[0] == category.id))
+        response_data.append({
+            'category_id': category.id,
+            'category_name': category.name,
+            'expenses': expenses,
+            'limit': limits_dict.get(category.id, 0),
+            'month': month
+        })
+
+    return response_data
+
+
+@router.get('/expenses_summary', response_model=list[TransactionSummaryResponse])
+def get_expenses_summary(month: int, db: Session = Depends(get_db)):
+    return _get_expenses_summary_data(month, db)
+
+
+@router.get('/dashboard_summary', response_model=DashboardResponse)
+def get_dashboard_summary(month: int, db: Session = Depends(get_db)):
+    expenses_summary = get_expenses_summary(month=month, db=db)
+    planned_amount = sum(item['limit'] for item in expenses_summary)
+    spent_amount = sum(item['expenses'] for item in expenses_summary)
+    total_savings = sum(max(item['limit'] - item['expenses'], 0) for item in expenses_summary)
+
+    return DashboardResponse(
+        planned_amount=planned_amount,
+        spent_amount=spent_amount,
+        total_savings=total_savings
+    )
+
+
+@router.delete('/categories/{category_id}', status_code=204)
+async def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_category = db.query(Category).filter(Category.id == category_id, Category.user_id == current_user.id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail='Category not found')
+   
+    db.delete(db_category)
+    db.commit()

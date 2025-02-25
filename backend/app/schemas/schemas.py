@@ -268,4 +268,21 @@ class TransactionSummaryResponse(BaseModel):
     category_id: int
     category_name: str
     expenses: float
+    limit: float
     month: int
+
+
+class DashboardResponse(BaseModel):
+    planned_amount: float
+    spent_amount: float
+    total_savings: float
+
+
+class CategoryEdit(BaseModel):
+    name: str
+
+
+class CategoryLimitCreate(BaseModel):
+    category_id: int
+    user_id: int
+    limit: float

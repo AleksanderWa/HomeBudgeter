@@ -19,6 +19,7 @@ from backend.app.schemas.schemas import (
     CreateCategoryLimit,
     PlanResponse,
     CategoryLimitResponse,
+    CategoryLimitCreate,  # Added CategoryLimitCreate
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -121,3 +122,60 @@ async def get_category_limits(
         )
         for category_limit in category_limits
     ]
+
+
+@router.post("/{plan_id}/category_limits/", response_model=CategoryLimitResponse)
+async def create_category_limit(
+    plan_id: int,
+    category_limit: CategoryLimitCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if category_limit.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail='Not authorized to create this limit')
+    
+    db_category_limit = (
+        db.query(CategoryLimit)
+        .filter(
+            CategoryLimit.plan_id == plan_id,
+            CategoryLimit.category_id == category_limit.category_id,
+            CategoryLimit.user_id == current_user.id,
+        )
+        .first()
+    )
+    if db_category_limit:
+        raise HTTPException(status_code=400, detail='Limit already exists')
+
+    db_category_limit = CategoryLimit(
+        plan_id=plan_id,
+        category_id=category_limit.category_id,
+        user_id=category_limit.user_id,
+        limit=category_limit.limit,
+    )
+    db.add(db_category_limit)
+    db.commit()
+    db.refresh(db_category_limit)
+    return db_category_limit
+
+
+@router.delete("/{plan_id}/categories/{category_id}", status_code=204)
+async def delete_category_limit(
+    plan_id: int,
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_category_limit = (
+        db.query(CategoryLimit)
+        .filter(
+            CategoryLimit.plan_id == plan_id,
+            CategoryLimit.category_id == category_id,
+            CategoryLimit.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not db_category_limit:
+        raise HTTPException(status_code=404, detail="Category limit not found")
+
+    db.delete(db_category_limit)
+    db.commit()

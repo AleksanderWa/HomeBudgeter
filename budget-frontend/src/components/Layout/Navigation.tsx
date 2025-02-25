@@ -151,6 +151,9 @@ export default function Navigation() {
               <Link to="/planning" className="text-gray-700 hover:text-gray-900 px-3 py-2">
                 Planning
               </Link>
+              <Link to="/category" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+                Categories
+              </Link>
               <button
                 onClick={logout}
                 className="text-gray-700 hover:text-gray-900 px-3 py-2"

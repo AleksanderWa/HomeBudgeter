@@ -1,9 +1,51 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import ExpenseChart from './ExpenseChart.tsx'
 import ExpenseList from './ExpenseList.tsx'
 import useExpenses from '../../hooks/useExpenses.ts'
 import Loader from '../UI/Loader.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
+import api from '../../client/api/client.ts';
+import { useNavigate } from 'react-router-dom';
+
+const DashboardSummary = () => {
+  const [plannedAmount, setPlannedAmount] = useState(0);
+  const [spentAmount, setSpentAmount] = useState(0);
+  const [totalSavings, setTotalSavings] = useState(0);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const currentMonthSavings = plannedAmount - spentAmount;
+
+  useEffect(() => {
+    api.onUnauthorized = () => navigate('/login');
+
+    const fetchData = async () => {
+      try {
+        const response = await api.get(`/transactions/dashboard_summary/?month=${month}`);
+        setPlannedAmount(response.data.planned_amount);
+        setSpentAmount(response.data.spent_amount);
+        setTotalSavings(response.data.total_savings);
+      } catch (error) {
+        console.error('Failed to fetch data', error);
+      }
+    };
+
+    fetchData();
+  }, [month]);
+
+  return (
+    <div className="p-4 bg-white rounded-lg shadow-md">
+      <h2 className="text-xl font-bold mb-4">Dashboard Summary</h2>
+      <p>This {monthNames[month - 1]} you planned <span className="font-semibold">{plannedAmount.toLocaleString()}</span> and already spent <span className="font-semibold">{spentAmount.toLocaleString()}</span>.</p>
+      <p>Savings this month: <span className="font-semibold">{currentMonthSavings.toLocaleString()}</span></p>
+      <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p>
+    </div>
+  );
+};
 
 export default function Dashboard() {
   const { expenses, loading } = useExpenses()
@@ -16,6 +58,12 @@ export default function Dashboard() {
   // New state for year and month filtering
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    api.onUnauthorized = () => navigate('/login');
+  }, [navigate]);
 
   // Get unique years from expenses
   const availableYears = useMemo(() => {
@@ -72,6 +120,11 @@ export default function Dashboard() {
     }
   }
 
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
@@ -105,11 +158,13 @@ export default function Dashboard() {
               <option value="">All Months</option>
               {[...Array(12)].map((_, index) => (
                 <option key={index + 1} value={index + 1}>
-                  {new Date(0, index).toLocaleString('default', { month: 'long' })}
+                  {monthNames[index]}
                 </option>
               ))}
             </select>
           </div>
+
+          <DashboardSummary />
 
           <div className="w-full max-w-4xl mx-auto">
             <ExpenseChart

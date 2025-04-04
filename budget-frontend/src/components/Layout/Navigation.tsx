@@ -154,6 +154,9 @@ export default function Navigation() {
               <Link to="/category" className="text-gray-700 hover:text-gray-900 px-3 py-2">
                 Categories
               </Link>
+              <Link to="/banking" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+                Banking
+              </Link>
               <button
                 onClick={logout}
                 className="text-gray-700 hover:text-gray-900 px-3 py-2"

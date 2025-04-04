@@ -467,7 +467,7 @@ def delete_transaction(
     db.commit()
 
 
-def _get_expenses_summary_data(month: int, db: Session):
+def _get_expenses_summary_data(month: int, db: Session, current_user: User):
     summary = (
         db.query(
             Transaction.category,
@@ -480,8 +480,12 @@ def _get_expenses_summary_data(month: int, db: Session):
         .all()
     )
 
-    categories = db.query(Category).all()
-    limits = db.query(CategoryLimit).filter(CategoryLimit.category_id.in_([category.id for category in categories])).all()
+    categories = db.query(Category).join(Transaction, Category.id == Transaction.category).filter(extract('month', Transaction.operation_date) == month).all()
+    limits = db.query(CategoryLimit).join(Plan).filter(
+        CategoryLimit.category_id.in_([category.id for category in categories]),
+        Plan.month == month,
+        Plan.user_id == current_user.id
+    ).all() 
     limits_dict = {limit.category_id: limit.limit for limit in limits}
 
     response_data = []
@@ -499,21 +503,28 @@ def _get_expenses_summary_data(month: int, db: Session):
 
 
 @router.get('/expenses_summary', response_model=list[TransactionSummaryResponse])
-def get_expenses_summary(month: int, db: Session = Depends(get_db)):
-    return _get_expenses_summary_data(month, db)
+def get_expenses_summary(month: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _get_expenses_summary_data(month, db, current_user)
 
 
 @router.get('/dashboard_summary', response_model=DashboardResponse)
-def get_dashboard_summary(month: int, db: Session = Depends(get_db)):
-    expenses_summary = get_expenses_summary(month=month, db=db)
+def get_dashboard_summary(month: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    expenses_summary = get_expenses_summary(month=month, current_user=current_user, db=db)
     planned_amount = sum(item['limit'] for item in expenses_summary)
     spent_amount = sum(item['expenses'] for item in expenses_summary)
     total_savings = sum(max(item['limit'] - item['expenses'], 0) for item in expenses_summary)
 
+    incomes = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == current_user.id,
+        extract('month', Transaction.operation_date) == month,
+        Transaction.amount > 0
+    ).scalar() or 0  # Default to 0 if no incomes are found
+
     return DashboardResponse(
         planned_amount=planned_amount,
         spent_amount=spent_amount,
-        total_savings=total_savings
+        total_savings=total_savings,
+        incomes=incomes
     )
 
 

@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token) {
         try {
           // Verify token with backend using full URL
-          const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/me`, {
+          const response = await axios.get(`/api/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`
             }

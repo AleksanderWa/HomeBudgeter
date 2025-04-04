@@ -14,6 +14,11 @@ import Upload from './components/Upload/Upload.tsx'
 import Planning from './components/Planning/Planning.tsx' // Added import statement
 import Category from './components/Category/Category.tsx' // Added import statement
 import axios from 'axios'
+import CategoryPage from './components/Category/Category.tsx'
+import UploadPage from './components/Upload/Upload.tsx'
+import PlanningPage from './components/Planning/Planning.tsx'
+import Banking from './components/Banking/Banking.tsx'
+import BankCallback from './components/Banking/BankCallback.tsx'
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 
@@ -55,9 +60,11 @@ const AppContent: React.FC = () => {
           <Route element={<PrivateRoute />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/list" element={<ExpenseList />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/planning" element={<Planning />} /> // Added route
-            <Route path="/category" element={<Category />} /> // Added route
+            <Route path="/upload" element={<UploadPage />} />
+            <Route path="/planning" element={<PlanningPage />} />
+            <Route path="/category" element={<CategoryPage />} />
+            <Route path="/banking" element={<Banking />} />
+            <Route path="/bank-callback" element={<BankCallback />} />
           </Route>
         </Routes>
       </main>

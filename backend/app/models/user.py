@@ -11,3 +11,4 @@ class User(Base):
     hashed_password = Column(String)
     plans = relationship('Plan', back_populates='user')
     category_limits = relationship('CategoryLimit', back_populates='user')
+    bank_connections = relationship('BankConnection', backref='user')

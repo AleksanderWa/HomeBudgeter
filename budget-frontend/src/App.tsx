@@ -20,7 +20,7 @@ import PlanningPage from './components/Planning/Planning.tsx'
 import Banking from './components/Banking/Banking.tsx'
 import BankCallback from './components/Banking/BankCallback.tsx'
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8100';
 
 // Configure axios defaults and interceptors
 axios.defaults.baseURL = API_URL;

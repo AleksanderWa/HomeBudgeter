@@ -17,6 +17,7 @@ load_dotenv(dotenv_path=env_path)
 print(f"TRUELAYER_CLIENT_ID: {os.getenv('TRUELAYER_CLIENT_ID')}")
 print(f"TRUELAYER_REDIRECT_URI: {os.getenv('TRUELAYER_REDIRECT_URI')}")
 
+
 class TrueLayerService:
     # Use production endpoints
     BASE_URL = "https://api.truelayer.com"
@@ -26,7 +27,7 @@ class TrueLayerService:
         # Load values with fallbacks for debugging
         self.client_id = os.getenv("TRUELAYER_CLIENT_ID")
         self.client_secret = os.getenv("TRUELAYER_CLIENT_SECRET")
-        self.redirect_uri = os.getenv("TRUELAYER_REDIRECT_URI")
+        self.redirect_uri = 'https://console.truelayer.com/redirect-page' #os.getenv("TRUELAYER_REDIRECT_URI")
         
         # Add debug prints in the constructor
         print("Initialized TrueLayerService with:")
@@ -49,7 +50,7 @@ class TrueLayerService:
             "redirect_uri": self.redirect_uri,
             "state": state,
             # Use production providers as per the working link
-            "providers": "uk-ob-all uk-oauth-all pl-ob-revolut pl-polishapi-all"
+            "providers": "pl-polishapi-mbank pl-polishapi-ing uk-oauth-all"
         }
 
         params = "&".join([f"{k}={v}" for k, v in query_params.items()])

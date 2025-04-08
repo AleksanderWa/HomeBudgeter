@@ -27,7 +27,7 @@ class TrueLayerService:
         # Load values with fallbacks for debugging
         self.client_id = os.getenv("TRUELAYER_CLIENT_ID")
         self.client_secret = os.getenv("TRUELAYER_CLIENT_SECRET")
-        self.redirect_uri = 'https://console.truelayer.com/redirect-page' #os.getenv("TRUELAYER_REDIRECT_URI")
+        self.redirect_uri = os.getenv("TRUELAYER_REDIRECT_URI") or 'https://console.truelayer.com/redirect-page'
         
         # Add debug prints in the constructor
         print("Initialized TrueLayerService with:")

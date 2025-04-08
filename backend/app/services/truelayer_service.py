@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 # Get the absolute path to the .env file
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-env_path = BASE_DIR / '.env'
+env_path = BASE_DIR / ".env"
 
 # Load the environment variables with explicit path
 load_dotenv(dotenv_path=env_path)
@@ -27,21 +27,32 @@ class TrueLayerService:
         # Load values with fallbacks for debugging
         self.client_id = os.getenv("TRUELAYER_CLIENT_ID")
         self.client_secret = os.getenv("TRUELAYER_CLIENT_SECRET")
-        self.redirect_uri = os.getenv("TRUELAYER_REDIRECT_URI") or 'https://console.truelayer.com/redirect-page'
-        
+        self.redirect_uri = (
+            os.getenv("TRUELAYER_REDIRECT_URI")
+            or "https://console.truelayer.com/redirect-page"
+        )
+
         # Add debug prints in the constructor
         print("Initialized TrueLayerService with:")
         print(f"  - client_id: {self.client_id}")
         print(f"  - redirect_uri: {self.redirect_uri}")
-        
+
         if not self.client_id or not self.client_secret:
             print("WARNING: TrueLayer credentials not found!")
 
     def generate_auth_link(self, state: str) -> str:
         """Generate authentication link for users to connect their bank account"""
         # Include all required scopes as in the working URL
-        scopes = ["info", "accounts", "balance", "cards", "transactions", 
-                  "direct_debits", "standing_orders", "offline_access"]
+        scopes = [
+            "info",
+            "accounts",
+            "balance",
+            "cards",
+            "transactions",
+            "direct_debits",
+            "standing_orders",
+            "offline_access",
+        ]
 
         query_params = {
             "response_type": "code",
@@ -50,7 +61,7 @@ class TrueLayerService:
             "redirect_uri": self.redirect_uri,
             "state": state,
             # Use production providers as per the working link
-            "providers": "pl-polishapi-mbank pl-polishapi-ing uk-oauth-all"
+            "providers": "pl-polishapi-mbank pl-polishapi-ing uk-oauth-all",
         }
 
         params = "&".join([f"{k}={v}" for k, v in query_params.items()])
@@ -69,18 +80,18 @@ class TrueLayerService:
             "redirect_uri": self.redirect_uri,
             "code": code,
         }
-        
+
         print(f"Sending token request to: {url}")
         print(f"With payload: {payload}")
-        
+
         response = requests.post(url, data=payload)
-        
+
         # Check for errors and log them
         if response.status_code != 200:
             print(f"Error exchanging code: {response.status_code}")
             print(f"Response: {response.text}")
             response.raise_for_status()
-            
+
         return response.json()
 
     def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:

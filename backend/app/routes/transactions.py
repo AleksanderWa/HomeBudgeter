@@ -90,7 +90,7 @@ async def upload_transactions(
                     row["#Data operacji"], "%Y-%m-%d"
                 ).date(),
                 description=row["#Opis operacji"],
-                account=row["#Rachunek"],
+                # account=row["#Rachunek"],
                 category=categories[
                     row["#Kategoria"]
                 ],  # Use category ID instead of name

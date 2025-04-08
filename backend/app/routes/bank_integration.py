@@ -36,7 +36,7 @@ async def get_auth_link(current_user: User = Depends(get_current_user)):
 async def truelayer_callback(
     code: str = Query(...),
     state: str = Query(...),
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Handle callback from TrueLayer after user authorizes access"""

@@ -274,7 +274,7 @@ def get_transactions(
 
     transactions = (
         db.query(Transaction, Category)
-        .join(Category, Transaction.category == Category.id)
+        .outerjoin(Category, Transaction.category == Category.id)
         .filter(Transaction.user_id == current_user.id)
         .order_by(desc(Transaction.operation_date))
         .offset(offset)

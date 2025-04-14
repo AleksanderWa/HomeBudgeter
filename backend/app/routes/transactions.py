@@ -269,12 +269,14 @@ def get_transactions(
     - `page_size`: Number of transactions per page (default 100, max 1000)
 
     Returns a list of transactions sorted by operation date in descending order.
+    Includes transactions even if they don't have a category assigned.
     """
     offset = (page - 1) * page_size
 
-    transactions = (
+    # Use outerjoin to include transactions without categories
+    transactions_query_result = (
         db.query(Transaction, Category)
-        .outerjoin(Category, Transaction.category == Category.id)
+        .outerjoin(Category, Transaction.category == Category.id) # Use outerjoin here
         .filter(Transaction.user_id == current_user.id)
         .order_by(desc(Transaction.operation_date))
         .offset(offset)
@@ -282,11 +284,28 @@ def get_transactions(
         .all()
     )
 
-    # Transform the query results to match the response model
-    transactions_with_category = [
-        {**transaction.__dict__, "category": category.__dict__}
-        for transaction, category in transactions
-    ]
+    # Transform the query results to match the TransactionResponse model, handling null categories
+    transactions_response_list = []
+    for transaction, category in transactions_query_result:
+        category_data = None
+        if category:
+            category_data = CategoryInTransaction(
+                id=category.id,
+                name=category.name,
+                user_id=category.user_id
+            )
+        
+        transactions_response_list.append(
+            TransactionResponse(
+                id=transaction.id,
+                operation_date=transaction.operation_date,
+                description=transaction.description,
+                category=category_data, # Assign CategoryInTransaction or None
+                amount=transaction.amount,
+                user_id=transaction.user_id,
+            )
+        )
+
 
     total_transactions = (
         db.query(func.count(Transaction.id))
@@ -297,7 +316,7 @@ def get_transactions(
     total_pages = (total_transactions + page_size - 1) // page_size
 
     return {
-        "transactions": transactions_with_category,
+        "transactions": transactions_response_list, # Use the correctly formatted list
         "page": page,
         "page_size": page_size,
         "total_transactions": total_transactions,

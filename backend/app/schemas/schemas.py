@@ -50,7 +50,7 @@ class CategoryInTransaction(BaseModel):
 class TransactionBase(BaseModel):
     operation_date: Union[datetime, date]
     description: str
-    category: CategoryInTransaction
+    category: Optional[CategoryInTransaction]
     amount: Decimal = Field(..., decimal_places=2)
 
     @validator("amount", pre=True)

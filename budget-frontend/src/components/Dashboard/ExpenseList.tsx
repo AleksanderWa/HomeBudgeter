@@ -5,7 +5,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon } from '@heroicons/react/24/outline';
 import useExpenses from '../../hooks/useExpenses.ts';
-import axios from 'axios';
 import api from '../../client/api/client.ts';
 
 interface ExpenseListProps {
@@ -90,8 +89,8 @@ export default function ExpenseList({
       // Immediately add to deleted transactions to apply red color
       setDeletedTransactionIds(prev => [...prev, selectedTransactionId]);
 
-      await axios.delete(`/api/transactions/${selectedTransactionId}`, {
-        validateStatus: (status) => status === 204 // Only consider 204 as a successful response
+      await api.delete(`/transactions/${selectedTransactionId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
 
       // Remove from local expenses after animation
@@ -138,7 +137,7 @@ export default function ExpenseList({
     try {
       const transactionToUpdate = filteredExpenses[index];
       // Make sure to send the correct transaction ID
-      await axios.put(`/api/transactions/${transactionToUpdate.id}`, payload);
+      await api.put(`/transactions/${transactionToUpdate.id}`, payload);
       
       // Update local state with the modified transaction
       // Ensure the updated transaction reflects the potential null category

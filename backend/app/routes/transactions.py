@@ -199,7 +199,7 @@ async def update_category(
     return db_category
 
 
-@router.post("/categories", response_model=dict)
+@router.post("/categories", response_model=CategoryResponse)
 def create_category(
     category_data: CategoryCreate,
     db: Session = Depends(get_db),

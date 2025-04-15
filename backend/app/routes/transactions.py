@@ -260,6 +260,8 @@ def create_category(
 def get_transactions(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=1900, le=2100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -268,17 +270,30 @@ def get_transactions(
 
     - `page`: Page number (starts from 1)
     - `page_size`: Number of transactions per page (default 100, max 1000)
+    - `month`: Optional filter for month (1-12)
+    - `year`: Optional filter for year
 
     Returns a list of transactions sorted by operation date in descending order.
     Includes transactions even if they don't have a category assigned.
     """
     offset = (page - 1) * page_size
 
-    # Use outerjoin to include transactions without categories
-    transactions_query_result = (
+    # Build base query with outer join for categories
+    query = (
         db.query(Transaction, Category)
-        .outerjoin(Category, Transaction.category_id == Category.id)  # Use outerjoin here
+        .outerjoin(Category, Transaction.category_id == Category.id)
         .filter(Transaction.user_id == current_user.id)
+    )
+    
+    # Apply month and year filters if provided
+    if month is not None:
+        query = query.filter(extract('month', Transaction.operation_date) == month)
+    if year is not None:
+        query = query.filter(extract('year', Transaction.operation_date) == year)
+    
+    # Add ordering, pagination and execute
+    transactions_query_result = (
+        query
         .order_by(desc(Transaction.operation_date))
         .offset(offset)
         .limit(page_size)
@@ -307,17 +322,18 @@ def get_transactions(
             )
         )
 
-
-    total_transactions = (
-        db.query(func.count(Transaction.id))
-        .filter(Transaction.user_id == current_user.id)
-        .scalar()
-    )
-
+    # Count total transactions with the same filters
+    count_query = db.query(func.count(Transaction.id)).filter(Transaction.user_id == current_user.id)
+    if month is not None:
+        count_query = count_query.filter(extract('month', Transaction.operation_date) == month)
+    if year is not None:
+        count_query = count_query.filter(extract('year', Transaction.operation_date) == year)
+    
+    total_transactions = count_query.scalar()
     total_pages = (total_transactions + page_size - 1) // page_size
 
     return {
-        "transactions": transactions_response_list, # Use the correctly formatted list
+        "transactions": transactions_response_list,  # Use the correctly formatted list
         "page": page,
         "page_size": page_size,
         "total_transactions": total_transactions,

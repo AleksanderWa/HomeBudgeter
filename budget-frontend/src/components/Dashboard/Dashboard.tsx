@@ -62,16 +62,18 @@ const DashboardSummary = () => {
 };
 
 export default function Dashboard() {
-  const { expenses, loading } = useExpenses()
+  const { expenses, loading, refresh } = useExpenses()
   const { isAuthenticated } = useAuth()
-  console.log('Dashboard Auth state:', isAuthenticated)
   
   const [excludeIncome, setExcludeIncome] = useState(false)
   const [topLimit, setTopLimit] = useState(5)
   
-  // New state for year and month filtering
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
+  // Set current year and month as default values instead of null
+  const currentDate = new Date()
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1)
+  // Track if we need to manually refresh
+  const [shouldRefresh, setShouldRefresh] = useState(false)
 
   const navigate = useNavigate();
 
@@ -83,10 +85,19 @@ export default function Dashboard() {
   const availableYears = useMemo(() => {
     return Array.from(new Set(
       expenses.map(expense => new Date(expense.operation_date).getFullYear())
-    )).sort((a, b) => b - a)
+    )).sort((a, b) => Number(b) - Number(a))
   }, [expenses])
 
-  // Filter expenses by year and month
+  // Only refresh when shouldRefresh is true
+  useEffect(() => {
+    if (shouldRefresh) {
+      refresh(1, 100, selectedMonth, selectedYear);
+      setShouldRefresh(false);
+    }
+  }, [shouldRefresh, selectedMonth, selectedYear, refresh]);
+  
+  // Filter expenses by year and month - this client-side filtering is still useful
+  // in case the API returns more data than just the current selection
   const filteredExpenses = useMemo(() => {
     return expenses.filter(expense => {
       const expenseDate = new Date(expense.operation_date)
@@ -111,7 +122,7 @@ export default function Dashboard() {
   const chartDataArray = useMemo(() => 
     Object.entries(chartData)
       .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
       .slice(0, topLimit)
   , [chartData, topLimit])
 
@@ -132,6 +143,16 @@ export default function Dashboard() {
     if (isNaN(year)) {
       setSelectedMonth(null)
     }
+    // Mark that we need to refresh data
+    setShouldRefresh(true);
+  }
+  
+  // Update month selection and trigger refresh
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const month = parseInt(e.target.value, 10)
+    setSelectedMonth(!isNaN(month) && month >= 1 && month <= 12 ? month : null)
+    // Mark that we need to refresh data
+    setShouldRefresh(true);
   }
 
   const monthNames = [
@@ -162,10 +183,7 @@ export default function Dashboard() {
 
             <select 
               value={selectedMonth || ''} 
-              onChange={(e) => {
-                const month = parseInt(e.target.value, 10)
-                setSelectedMonth(!isNaN(month) && month >= 1 && month <= 12 ? month : null)
-              }}
+              onChange={handleMonthChange}
               disabled={selectedYear === null}
               className={`p-2 border rounded ${selectedYear === null ? 'opacity-50 cursor-not-allowed' : ''}`}
             >

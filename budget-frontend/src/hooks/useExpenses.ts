@@ -35,11 +35,16 @@ export default function useExpenses() {
     totalPages: 0
   })
 
-  const fetchExpenses = async (page = 1, pageSize = 100) => {
+  const fetchExpenses = async (page = 1, pageSize = 100, month?: number, year?: number) => {
     setLoading(true)
     try {
       const response = await api.get<PaginatedExpenses>('/transactions', { 
-        params: { page, page_size: pageSize } 
+        params: { 
+          page, 
+          page_size: pageSize,
+          month,
+          year
+        } 
       })
       
       setExpenses(response.data.transactions)
@@ -63,7 +68,13 @@ export default function useExpenses() {
   }, []);
 
   useEffect(() => {
-    fetchExpenses()
+    // Get current month and year for default filtering
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentYear = now.getFullYear();
+    
+    // Default to showing current month's transactions
+    fetchExpenses(1, 100, currentMonth, currentYear);
 
     // Add event listener for transaction updates
     window.addEventListener('transactionsUpdated', handleTransactionsUpdated as EventListener);

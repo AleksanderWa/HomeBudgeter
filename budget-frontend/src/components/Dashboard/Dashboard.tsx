@@ -85,7 +85,7 @@ export default function Dashboard() {
   // Process data for chart and top categories
   const chartData = useMemo(() => {
     return filteredExpenses.reduce((acc, expense) => {
-      const categoryName = expense.category.name || 'Uncategorized'
+      const categoryName = expense.category?.name || 'Uncategorized'
       if (!acc[categoryName]) {
         acc[categoryName] = 0
       }
@@ -105,7 +105,7 @@ export default function Dashboard() {
   const topCategoryTransactions = useMemo(() => {
     const topCategories = new Set(chartDataArray.map(item => item.category))
     return filteredExpenses.filter(expense => 
-      topCategories.has(expense.category.name)
+      topCategories.has(expense.category?.name || 'Uncategorized')
     )
   }, [filteredExpenses, chartDataArray])
 

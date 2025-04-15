@@ -120,18 +120,46 @@ export default function ExpenseList({
   };
 
   const handleSave = async (index: number) => {
+    // Prepare payload, handling potential null category
     const payload = {
-      ...editedTransaction,
-      category_name: editedTransaction.category.name,
+      amount: editedTransaction.amount,
+      description: editedTransaction.description,
+      operation_date: editedTransaction.operation_date,
+      // Send category name if category exists, otherwise handle appropriately (e.g., send null or specific value)
+      // The backend endpoint expects category_name based on TransactionEdit schema
+      category_name: editedTransaction.category?.name || null, // Sending null if category is null
+      user_id: editedTransaction.user_id // Assuming user_id is part of the transaction object
     };
-    delete payload.category;
-    delete payload.id;
+
+    // Remove fields not expected by the backend if necessary (like category object itself)
+    // delete payload.category; 
+    // delete payload.id;
+
     try {
-      await axios.put(`/api/transactions/${filteredExpenses[index].id}`, payload);
-      setLocalExpenses(localExpenses.map((expense, i) => i === index ? editedTransaction : expense));
-      setEditingIndex(null);
+      const transactionToUpdate = filteredExpenses[index];
+      // Make sure to send the correct transaction ID
+      await axios.put(`/api/transactions/${transactionToUpdate.id}`, payload);
+      
+      // Update local state with the modified transaction
+      // Ensure the updated transaction reflects the potential null category
+      const updatedExpense = { ...transactionToUpdate, ...payload };
+      if (payload.category_name === null) {
+        updatedExpense.category = null;
+      } else {
+        updatedExpense.category = { 
+            ...(updatedExpense.category || {}), 
+            name: payload.category_name 
+        };
+      }
+      delete updatedExpense.category_name; // Clean up temporary field
+
+      setLocalExpenses(localExpenses.map((expense) => 
+        expense.id === transactionToUpdate.id ? updatedExpense : expense
+      ));
+      setEditingIndex(null); // Exit editing mode
     } catch (error) {
       console.error('Failed to save transaction', error);
+      // Potentially show an error message to the user
     }
   };
 
@@ -142,9 +170,18 @@ export default function ExpenseList({
     setEditedTransaction(updatedTransactions[index]);
   };
 
-  const handleCategoryChange = (index: number, category: string) => {
+  const handleCategoryChange = (index: number, categoryName: string) => {
     const updatedTransactions = [...localExpenses];
-    updatedTransactions[index].category = { name: category }; 
+    // If 'Uncategorized' is selected, set category to null
+    if (categoryName === 'Uncategorized') {
+      updatedTransactions[index].category = null;
+    } else {
+      // Otherwise, create/update the category object
+      updatedTransactions[index].category = { 
+        ...(updatedTransactions[index].category || {}), // Preserve existing id/user_id if editing existing
+        name: categoryName 
+      };
+    }
     setLocalExpenses(updatedTransactions);
     setEditedTransaction(updatedTransactions[index]);
   };
@@ -250,17 +287,19 @@ export default function ExpenseList({
                   <td className="p-2">
                     {editingIndex === index ? (
                       <select
-                        value={expense.category.name}
+                        value={expense.category?.name || ''}
                         onChange={(e) => handleCategoryChange(index, e.target.value)}
                         className="border p-2 w-full"
                       >
+                        <option value="">Select Category</option>
+                        <option value="Uncategorized">Uncategorized</option>
                         {categories.map((category) => (
                           <option key={category} value={category}>{category}</option>
                         ))}
                       </select>
                     ) : (
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                        {expense.category.name}
+                        {expense.category?.name || 'Uncategorized'}
                       </span>
                     )}
                   </td>

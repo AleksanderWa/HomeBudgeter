@@ -450,8 +450,8 @@ async def edit_transaction(
             categorization_service = CategorizationService(db)
             categorization_service.create_or_update_rule(
                 user_id=current_user.id, 
-                merchant_name=transaction.merchant_name, 
-                category_id=category.id
+                category_id=category.id,
+                merchant_name=transaction.merchant_name
             )
         except Exception as e:
             # Log the error e
@@ -459,6 +459,17 @@ async def edit_transaction(
             # For now, we'll let the commit proceed but potentially log the rule update failure
             print(f"Warning: Failed to update categorization rule for transaction {transaction_id}: {e}")
             # Optionally: db.rollback() and raise HTTPException if rule update is critical
+    # If no merchant name but we have description, create a rule based on description
+    elif transaction.description and category:
+        try:
+            categorization_service = CategorizationService(db)
+            categorization_service.create_or_update_rule(
+                user_id=current_user.id, 
+                category_id=category.id,
+                description_pattern=transaction.description
+            )
+        except Exception as e:
+            print(f"Warning: Failed to update description-based rule for transaction {transaction_id}: {e}")
 
     db.commit()
     db.refresh(transaction)

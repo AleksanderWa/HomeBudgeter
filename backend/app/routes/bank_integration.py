@@ -119,10 +119,9 @@ async def truelayer_callback(
                     )
                     transaction = Transaction(**tx_formatted)
                     
-                    # Attempt automatic categorization
-                    if transaction.merchant_name:
-                        categorization_service.apply_category_to_transaction(transaction)
-                        # The transaction object might have category_id updated now
+                    # Attempt automatic categorization now based on merchant_name OR description
+                    categorization_service.apply_category_to_transaction(transaction)
+                    # The transaction object might have category_id updated now
                         
                     db.add(transaction)
                     transactions_imported += 1
@@ -219,10 +218,9 @@ async def refresh_transactions(
                     )
                     transaction = Transaction(**tx_formatted)
                     
-                    # Attempt automatic categorization
-                    if transaction.merchant_name:
-                        categorization_service.apply_category_to_transaction(transaction)
-                        # The transaction object might have category_id updated now
+                    # Attempt automatic categorization now based on merchant_name OR description
+                    categorization_service.apply_category_to_transaction(transaction)
+                    # The transaction object might have category_id updated now
                         
                     db.add(transaction)
                     transactions_imported += 1

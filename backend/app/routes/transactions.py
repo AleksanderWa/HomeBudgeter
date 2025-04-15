@@ -582,11 +582,42 @@ def get_dashboard_summary(month: int, current_user: User = Depends(get_current_u
         Transaction.amount > 0
     ).scalar() or 0  # Default to 0 if no incomes are found
 
+    # Calculate spent today (negative amounts are expenses)
+    today = datetime.utcnow().date()
+    spent_today = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == current_user.id,
+        Transaction.operation_date == today,
+        Transaction.amount < 0
+    ).scalar() or 0
+    spent_today = abs(spent_today)  # Convert to positive value for display
+
+    # Calculate spent this month (all expenses for current month regardless of category)
+    current_month = today.month
+    current_year = today.year
+    spent_this_month = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == current_user.id,
+        extract('month', Transaction.operation_date) == current_month,
+        extract('year', Transaction.operation_date) == current_year,
+        Transaction.amount < 0
+    ).scalar() or 0
+    spent_this_month = abs(spent_this_month)  # Convert to positive value for display
+
+    # Calculate spent this year (all expenses for current year)
+    spent_this_year = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == current_user.id,
+        extract('year', Transaction.operation_date) == current_year,
+        Transaction.amount < 0
+    ).scalar() or 0
+    spent_this_year = abs(spent_this_year)  # Convert to positive value for display
+
     return DashboardResponse(
         planned_amount=planned_amount,
         spent_amount=spent_amount,
         total_savings=total_savings,
-        incomes=incomes
+        incomes=incomes,
+        spent_today=spent_today,
+        spent_this_month=spent_this_month,
+        spent_this_year=spent_this_year
     )
 
 

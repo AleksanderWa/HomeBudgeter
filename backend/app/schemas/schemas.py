@@ -277,6 +277,9 @@ class DashboardResponse(BaseModel):
     spent_amount: float
     total_savings: float
     incomes: float
+    spent_today: float
+    spent_this_month: float
+    spent_this_year: float
 
 
 class CategoryEdit(BaseModel):

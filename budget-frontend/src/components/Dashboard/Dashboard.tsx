@@ -11,7 +11,11 @@ const DashboardSummary = () => {
   const [plannedAmount, setPlannedAmount] = useState(0);
   const [spentAmount, setSpentAmount] = useState(0);
   const [totalSavings, setTotalSavings] = useState(0);
+  const [spentToday, setSpentToday] = useState(0);
+  const [spentThisMonth, setSpentThisMonth] = useState(0);
+  const [spentThisYear, setSpentThisYear] = useState(0);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const navigate = useNavigate();
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -29,20 +33,30 @@ const DashboardSummary = () => {
         setPlannedAmount(response.data.planned_amount);
         setSpentAmount(response.data.spent_amount);
         setTotalSavings(response.data.total_savings);
+        setSpentToday(response.data.spent_today);
+        setSpentThisMonth(response.data.spent_this_month);
+        setSpentThisYear(response.data.spent_this_year);
       } catch (error) {
         console.error('Failed to fetch data', error);
       }
     };
 
     fetchData();
-  }, [month]);
+  }, [month, navigate]);
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-md">
       <h2 className="text-xl font-bold mb-4">Dashboard Summary</h2>
       <p>This {monthNames[month - 1]} you planned <span className="font-semibold">{plannedAmount.toLocaleString()}</span> and already spent <span className="font-semibold">{spentAmount.toLocaleString()}</span>.</p>
       <p>Savings this month: <span className="font-semibold">{currentMonthSavings.toLocaleString()}</span></p>
-      <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p>
+      {/* <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p> */}
+      
+      <div className="mt-4 pt-4 border-t border-gray-200">
+        <h3 className="text-lg font-semibold mb-2">Spending Overview</h3>
+        <p>Spent today: <span className="font-semibold">{spentToday.toLocaleString()}</span></p>
+        <p>Spent this month: <span className="font-semibold">{spentThisMonth.toLocaleString()}</span></p>
+        <p>Spent this year: <span className="font-semibold">{spentThisYear.toLocaleString()}</span></p>
+      </div>
     </div>
   );
 };

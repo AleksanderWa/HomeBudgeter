@@ -92,14 +92,35 @@ async def truelayer_callback(
             token_expires_at=expires_at,
         )
         db.add(connection)
-        db.flush()
+        db.flush()  # Flush to get the connection ID
+
+        # Get the most recent transaction for this user to use as start date
+        # Even though connection is new, user may have had previous connections
+        most_recent_transaction = (
+            db.query(Transaction)
+            .filter(
+                Transaction.user_id == user.id,
+                Transaction.bank_transaction_id.isnot(None)  # Make sure it's a bank transaction
+            )
+            .order_by(Transaction.operation_date.desc())
+            .first()
+        )
+        
+        # Set from_date based on the most recent transaction
+        from_date = None
+        if most_recent_transaction and most_recent_transaction.operation_date:
+            # Start from one day after the most recent transaction to avoid duplicates
+            from_date = (most_recent_transaction.operation_date + timedelta(days=1)).isoformat()
+            print(f"Fetching transactions from {from_date} onwards")
 
         # Import transactions for all accounts
         transactions_imported = 0
         for account_data in accounts:
-            # Fetch transactions
+            # Fetch transactions with optional from_date
             transactions = truelayer_service.get_account_transactions(
-                token_data["access_token"], account_data["account_id"]
+                token_data["access_token"], 
+                account_data["account_id"],
+                from_date=from_date
             )
 
             # Import transactions
@@ -171,6 +192,25 @@ async def refresh_transactions(
 
     categorization_service = CategorizationService(db)
 
+    # Get the most recent transaction for this connection to use as start date
+    most_recent_transaction = (
+        db.query(Transaction)
+        .filter(
+            Transaction.bank_connection_id == connection.id,
+            Transaction.bank_transaction_id.isnot(None)  # Make sure it's a bank transaction
+        )
+        .order_by(Transaction.operation_date.desc())
+        .first()
+    )
+    
+    # Set from_date to one day after the most recent transaction we have
+    # or None if we don't have any transactions yet
+    from_date = None
+    if most_recent_transaction and most_recent_transaction.operation_date:
+        # Add one day to avoid duplicates (but still catch same-day transactions that came in later)
+        from_date = (most_recent_transaction.operation_date + timedelta(days=1)).isoformat()
+        print(f"Fetching transactions from {from_date} onwards")
+
     # Check if token is expired
     if connection.token_expires_at <= datetime.utcnow():
         # Refresh token
@@ -184,7 +224,8 @@ async def refresh_transactions(
                 seconds=token_data["expires_in"]
             )
             db.commit()
-        except Exception as e:
+        except Exception as error:
+            print(f"Token refresh error: {str(error)}")
             raise HTTPException(
                 status_code=401, detail="Failed to refresh token, reconnection required"
             )
@@ -196,9 +237,11 @@ async def refresh_transactions(
         # Import transactions for all accounts
         transactions_imported = 0
         for account_data in accounts:
-            # Fetch transactions
+            # Fetch transactions with optional from_date
             transactions = truelayer_service.get_account_transactions(
-                connection.access_token, account_data["account_id"]
+                connection.access_token, 
+                account_data["account_id"],
+                from_date=from_date  # Pass the from_date parameter
             )
 
             # Import transactions

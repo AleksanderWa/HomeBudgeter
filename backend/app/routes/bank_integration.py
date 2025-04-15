@@ -10,6 +10,7 @@ from backend.app.models.user import User
 from backend.app.models.transaction import BankConnection, Transaction
 from backend.app.routes.auth import get_current_user
 from backend.app.services.truelayer_service import TrueLayerService
+from backend.app.services.categorization_service import CategorizationService
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -43,6 +44,7 @@ async def truelayer_callback(
     db: Session = Depends(get_db),
 ):
     """Handle callback from TrueLayer after user authorizes access"""
+    categorization_service = CategorizationService(db)
     try:
         # Decode user_id from state
         try:
@@ -113,9 +115,15 @@ async def truelayer_callback(
 
                 if not existing_tx:
                     tx_formatted = truelayer_service.format_transaction(
-                        tx_data, user.id, connection.id  # Use fetched user
+                        tx_data, user.id, connection.id
                     )
                     transaction = Transaction(**tx_formatted)
+                    
+                    # Attempt automatic categorization
+                    if transaction.merchant_name:
+                        categorization_service.apply_category_to_transaction(transaction)
+                        # The transaction object might have category_id updated now
+                        
                     db.add(transaction)
                     transactions_imported += 1
 
@@ -161,6 +169,8 @@ async def refresh_transactions(
 
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
+
+    categorization_service = CategorizationService(db)
 
     # Check if token is expired
     if connection.token_expires_at <= datetime.utcnow():
@@ -208,6 +218,12 @@ async def refresh_transactions(
                         tx_data, current_user.id, connection.id
                     )
                     transaction = Transaction(**tx_formatted)
+                    
+                    # Attempt automatic categorization
+                    if transaction.merchant_name:
+                        categorization_service.apply_category_to_transaction(transaction)
+                        # The transaction object might have category_id updated now
+                        
                     db.add(transaction)
                     transactions_imported += 1
 

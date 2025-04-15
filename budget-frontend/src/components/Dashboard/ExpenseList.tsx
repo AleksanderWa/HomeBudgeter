@@ -27,8 +27,6 @@ const transitionStyles = {
   },
 };
 
-const categories = []; // Initialize categories as an empty array
-
 export default function ExpenseList({ 
   expenses: propExpenses, 
   hideFilters = false 
@@ -57,13 +55,14 @@ export default function ExpenseList({
   const [editedTransaction, setEditedTransaction] = useState<any>({
     amount: 0,
   });
+  const [categories, setCategories] = useState<string[]>([]);
 
   // Fetch categories from the API
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await api.get('/transactions/categories?only_names=true');
-        categories.push(...response.data.categories);
+        setCategories(response.data.categories);
       } catch (error) {
         console.error('Failed to fetch categories', error);
       }

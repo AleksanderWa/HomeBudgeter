@@ -286,3 +286,7 @@ class CategoryEdit(BaseModel):
 class CategoryLimitCreate(BaseModel):
     category_id: int
     limit: float
+
+
+class TransactionCategoryUpdate(BaseModel):
+    category_id: int

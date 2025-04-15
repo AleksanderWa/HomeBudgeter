@@ -1,5 +1,5 @@
 from ..database.database import Base
-from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index
 from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -26,25 +26,35 @@ class Transaction(Base):
     operation_date = Column(Date)
     description = Column(String)
     # account = Column(String)
-    category = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     amount = Column(DECIMAL(precision=10, scale=2), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"))
     
     # New fields for bank integration
     bank_transaction_id = Column(String, unique=True, nullable=True)
     account_name = Column(String, nullable=True)
-    merchant_name = Column(String, nullable=True)
+    merchant_name = Column(String, nullable=True, index=True)
     transaction_type = Column(String, nullable=True)
     bank_connection_id = Column(Integer, ForeignKey("bank_connections.id"), nullable=True)
+
+    # Relationships
+    user = relationship("User")
+    bank_connection = relationship("BankConnection")
+    category = relationship("Category", back_populates="transactions")
 
 
 class Category(Base):
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Relationships
+    user = relationship("User")
     category_limits = relationship('CategoryLimit', back_populates='category')
+    transactions = relationship("Transaction", back_populates="category")
+    categorization_rules = relationship("CategorizationRule", back_populates="category")
 
     __table_args__ = (
         UniqueConstraint('name', 'user_id', name='_category_name_user_uc'),

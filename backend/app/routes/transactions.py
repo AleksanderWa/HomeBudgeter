@@ -25,6 +25,7 @@ from backend.app.schemas.schemas import (
     CategoryEdit
 )
 from backend.app.utils.auth import get_current_user
+from backend.app.services.categorization_service import CategorizationService
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import desc, func, extract
 from sqlalchemy.orm import Session
@@ -91,7 +92,7 @@ async def upload_transactions(
                 ).date(),
                 description=row["#Opis operacji"],
                 # account=row["#Rachunek"],
-                category=categories[
+                category_id=categories[
                     row["#Kategoria"]
                 ],  # Use category ID instead of name
                 amount=amount,
@@ -124,13 +125,13 @@ def get_summary(
         )
 
     query = db.query(
-        Transaction.category, func.sum(Transaction.amount).label("total_amount")
+        Transaction.category_id, func.sum(Transaction.amount).label("total_amount")
     ).filter(Transaction.user_id == current_user.id)
 
     if period_start:
         query = query.filter(Transaction.date >= period_start)
 
-    query = query.group_by(Transaction.category).order_by(
+    query = query.group_by(Transaction.category_id).order_by(
         func.sum(Transaction.amount).desc()
     )
 
@@ -141,7 +142,7 @@ def get_summary(
 
     summary = {
         "categories": [
-            {"category": result.category, "amount": float(result.total_amount)}
+            {"category": result.category_id, "amount": float(result.total_amount)}
             for result in results
         ],
         "period": period,
@@ -276,7 +277,7 @@ def get_transactions(
     # Use outerjoin to include transactions without categories
     transactions_query_result = (
         db.query(Transaction, Category)
-        .outerjoin(Category, Transaction.category == Category.id) # Use outerjoin here
+        .outerjoin(Category, Transaction.category_id == Category.id)  # Use outerjoin here
         .filter(Transaction.user_id == current_user.id)
         .order_by(desc(Transaction.operation_date))
         .offset(offset)
@@ -360,7 +361,7 @@ def create_transaction(
     new_transaction = Transaction(
         operation_date=transaction_data.operation_date,
         description=transaction_data.description,
-        category=category.id,
+        category_id=category.id,
         amount=amount,
         user_id=current_user.id,
     )
@@ -390,7 +391,7 @@ async def edit_transaction(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
-    Edit a transaction for the current user.
+    Edit a transaction for the current user and update categorization rules.
 
     - Checks if the transaction exists
     - Verifies the transaction belongs to the current user
@@ -416,38 +417,69 @@ async def edit_transaction(
     amount = Decimal(transaction_data.amount).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
-
-    category = (
-        db.query(Category)
-        .filter(
-            Category.name.ilike(transaction_data.category_name),
-            Category.user_id == current_user.id,
-        )
-        .first()
-    )
-
-    if not category:
-        raise HTTPException(
-            status_code=400,
-            detail="Category not found or you do not have permission to edit it",
+    
+    category = None
+    if transaction_data.category_name:
+        category = (
+            db.query(Category)
+            .filter(
+                Category.name.ilike(transaction_data.category_name),
+                Category.user_id == current_user.id,
+            )
+            .first()
         )
 
-    transaction.operation_date = transaction_data.operation_date
-    transaction.description = transaction_data.description
-    transaction.category = category.id
+        if not category:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Category '{transaction_data.category_name}' not found or you do not have permission to use it",
+            )
+
+    # Update transaction fields
+    if transaction_data.operation_date:
+        transaction.operation_date = transaction_data.operation_date
+    if transaction_data.description:
+        transaction.description = transaction_data.description
+    if category: # Only update category if a valid one was found
+        transaction.category_id = category.id # Update category_id
     transaction.amount = amount
+
+    # Update categorization rule if merchant name exists and category was changed
+    if transaction.merchant_name and category:
+        try:
+            categorization_service = CategorizationService(db)
+            categorization_service.create_or_update_rule(
+                user_id=current_user.id, 
+                merchant_name=transaction.merchant_name, 
+                category_id=category.id
+            )
+        except Exception as e:
+            # Log the error e
+            # Decide if this error should prevent the transaction edit from committing
+            # For now, we'll let the commit proceed but potentially log the rule update failure
+            print(f"Warning: Failed to update categorization rule for transaction {transaction_id}: {e}")
+            # Optionally: db.rollback() and raise HTTPException if rule update is critical
 
     db.commit()
     db.refresh(transaction)
+
+    # Re-fetch the category object for the response based on the potentially updated category_id
+    response_category_info = None
+    if transaction.category_id:
+        final_category = db.get(Category, transaction.category_id) # Use db.get for direct fetch by PK
+        if final_category:
+            response_category_info = CategoryInTransaction(
+                id=final_category.id, 
+                name=final_category.name, 
+                user_id=final_category.user_id
+            )
 
     return TransactionResponse(
         id=transaction.id,
         user_id=transaction.user_id,
         operation_date=transaction.operation_date,
         description=transaction.description,
-        category=CategoryInTransaction(
-            id=category.id, name=category.name, user_id=category.user_id
-        ),
+        category=response_category_info, # Use potentially updated category info
         amount=transaction.amount,
     )
 
@@ -489,17 +521,17 @@ def delete_transaction(
 def _get_expenses_summary_data(month: int, db: Session, current_user: User):
     summary = (
         db.query(
-            Transaction.category,
+            Transaction.category_id,
             Category.name,
             func.sum(Transaction.amount).label('amount')
         )
-        .join(Category, Transaction.category == Category.id)
+        .join(Category, Transaction.category_id == Category.id)
         .filter(extract('month', Transaction.operation_date) == month)
-        .group_by(Transaction.category, Category.name)
+        .group_by(Transaction.category_id, Category.name)
         .all()
     )
 
-    categories = db.query(Category).join(Transaction, Category.id == Transaction.category).filter(extract('month', Transaction.operation_date) == month).all()
+    categories = db.query(Category).join(Transaction, Category.id == Transaction.category_id).filter(extract('month', Transaction.operation_date) == month).all()
     limits = db.query(CategoryLimit).join(Plan).filter(
         CategoryLimit.category_id.in_([category.id for category in categories]),
         Plan.month == month,

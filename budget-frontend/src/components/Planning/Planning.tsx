@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../client/api/client.ts';
-import { ArrowLeftIcon, ArrowRightIcon, Squares2X2Icon, Bars3Icon } from '@heroicons/react/24/outline';
-import { PlusIcon } from '@heroicons/react/24/solid';
-import { ChevronUpDownIcon } from '@heroicons/react/24/solid';
+import { ArrowLeftIcon, ArrowRightIcon, Squares2X2Icon, Bars3Icon, CalendarDaysIcon, CalendarIcon, PencilSquareIcon, PlusCircleIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon as SolidTrashIcon, ChevronUpDownIcon } from '@heroicons/react/24/solid';
 import { Combobox } from '@headlessui/react';
-import { TrashIcon } from '@heroicons/react/24/solid';
 
 const Planning = () => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -203,8 +201,15 @@ const Planning = () => {
                 </button>
             ) : (
                 <>
-                    <h1 className="text-2xl font-bold mb-6">Budget Planning</h1>
-                    <p className="text-lg text-gray-600 mb-6">{formattedDate}</p>
+                    <h1 className="text-2xl font-bold mb-2">
+                        Budget Planning
+                    </h1>
+                    <p className="text-lg text-gray-600 mb-6 flex items-center">
+                        <div className="w-5 h-5 mr-2 flex-shrink-0">
+                             <CalendarIcon className="w-full h-full text-gray-500" />
+                        </div>
+                        {formattedDate}
+                    </p>
                     <div className='flex items-center justify-between mb-4'>
                         <div>
                             <label className="block mb-4">
@@ -259,7 +264,7 @@ const Planning = () => {
                                             }}
                                             className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center'
                                         >
-                                            <TrashIcon className='w-4 h-4 mr-1' />
+                                            <SolidTrashIcon className='w-4 h-4 mr-1' />
                                             Delete
                                         </button>
                                     </div>
@@ -309,7 +314,7 @@ const Planning = () => {
                                             }}
                                             className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center absolute top-4 right-4'
                                         >
-                                            <TrashIcon className='w-4 h-4 mr-1' />
+                                            <SolidTrashIcon className='w-4 h-4 mr-1' />
                                             Delete
                                         </button>
                                     </div>
@@ -320,7 +325,10 @@ const Planning = () => {
                     {isAddLimitModalOpen && (
                         <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
                             <div className='bg-white p-6 rounded-lg w-96'>
-                                <h2 className='text-xl font-bold mb-4'>Add Category Limit</h2>
+                                <h2 className='text-xl font-bold mb-4 flex items-center'>
+                                    <PlusCircleIcon className="w-6 h-6 mr-2 text-green-500" />
+                                    Add Category Limit
+                                </h2>
                                 <div className='mb-4'>
                                     <label className='block text-sm font-medium mb-1'>Category</label>
                                     <Combobox value={selectedCategory} onChange={setSelectedCategory}>
@@ -366,14 +374,16 @@ const Planning = () => {
                                 <div className='flex justify-end space-x-2'>
                                     <button
                                         onClick={() => setIsAddLimitModalOpen(false)}
-                                        className='px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md'
+                                        className='px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md flex items-center'
                                     >
+                                        <XMarkIcon className="w-5 h-5 mr-1 text-gray-500" />
                                         Cancel
                                     </button>
                                     <button
                                         onClick={handleAddLimit}
-                                        className='px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md'
+                                        className='px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md flex items-center'
                                     >
+                                        <CheckIcon className="w-5 h-5 mr-1" />
                                         Add
                                     </button>
                                 </div>
@@ -383,7 +393,10 @@ const Planning = () => {
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
                             <div className="bg-white p-8 rounded-lg w-[500px] shadow-xl">
-                                <h2 className="text-xl font-bold mb-6 text-center">Set Budget Limit for {selectedCategoryName} in <span className="text-blue-500">{['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][selectedMonth - 1]}</span></h2>
+                                <h2 className="text-xl font-bold mb-6 text-center flex items-center justify-center">
+                                    <PencilSquareIcon className="w-6 h-6 mr-2 text-blue-500" />
+                                    Set Budget Limit for {selectedCategoryName} in <span className="text-blue-500">{['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][selectedMonth - 1]}</span>
+                                </h2>
                                 <div className="mb-6">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Limit Amount</label>
                                     <input
@@ -395,8 +408,14 @@ const Planning = () => {
                                     />
                                 </div>
                                 <div className="flex justify-end space-x-4">
-                                    <button onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Cancel</button>
-                                    <button onClick={handleLimitSubmit} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Save</button>
+                                    <button onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 flex items-center">
+                                        <XMarkIcon className="w-5 h-5 mr-1 text-gray-500" />
+                                        Cancel
+                                    </button>
+                                    <button onClick={handleLimitSubmit} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center">
+                                        <CheckIcon className="w-5 h-5 mr-1" />
+                                        Save
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -404,13 +423,17 @@ const Planning = () => {
                     {isDeleteConfirmationModalOpen && (
                         <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
                             <div className='bg-white p-6 rounded-lg w-96'>
-                                <h2 className='text-xl font-bold mb-4'>Delete Category Limit</h2>
+                                <h2 className='text-xl font-bold mb-4 flex items-center'>
+                                    <ExclamationTriangleIcon className="w-6 h-6 mr-2 text-red-500" />
+                                    Delete Category Limit
+                                </h2>
                                 <p className='mb-4'>Are you sure you want to delete this category limit?</p>
                                 <div className='flex justify-end space-x-2'>
                                     <button
                                         onClick={() => setIsDeleteConfirmationModalOpen(false)}
-                                        className='px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md'
+                                        className='px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md flex items-center'
                                     >
+                                        <XMarkIcon className="w-5 h-5 mr-1 text-gray-500" />
                                         Cancel
                                     </button>
                                     <button
@@ -420,8 +443,9 @@ const Planning = () => {
                                                 setIsDeleteConfirmationModalOpen(false);
                                             }
                                         }}
-                                        className='px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded-md'
+                                        className='px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded-md flex items-center'
                                     >
+                                        <SolidTrashIcon className="w-5 h-5 mr-1" />
                                         Delete
                                     </button>
                                 </div>

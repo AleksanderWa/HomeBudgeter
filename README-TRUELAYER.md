@@ -80,8 +80,36 @@ TrueLayer transactions are automatically converted to match your existing Transa
 - `transaction_type`: Type of transaction (e.g., debit, credit)
 - `bank_connection_id`: Reference to the connected bank
 
+**Important:** Only expense transactions (those with a negative amount) are imported. Income transactions are skipped.
+
+## Automatic Transaction Categorization
+
+Transactions imported from TrueLayer are automatically categorized based on:
+
+1. **Transaction Description**: When a transaction has a description that matches a previously categorized transaction.
+2. **Merchant Name**: If available, the merchant name will also be used for matching.
+
+The system works as follows:
+
+- When a user manually assigns a category to a transaction, the system remembers this categorization rule.
+- Future transactions with the same description or merchant name will be automatically assigned the same category.
+- This reduces the need for repetitive manual categorization of recurring transactions.
+
+## Optimized Transaction Fetching
+
+The integration intelligently fetches only new transactions:
+
+1. **Smart Initial Import**: When connecting a new bank account, it checks your existing transactions to avoid importing duplicates.
+2. **Incremental Updates**: When refreshing transactions, it only fetches transactions newer than your most recent transaction.
+
+Benefits:
+- Reduced API calls to TrueLayer
+- Better performance with less data to process
+- Avoids duplicate transactions
+
 ## Limitations
 
 - Bank connections expire and need to be refreshed. The integration handles token refreshing automatically.
 - TrueLayer's API has rate limits. Check their documentation for details.
-- Not all banks provide the same level of transaction detail. Some fields might be empty for certain banks. 
+- Not all banks provide the same level of transaction detail. Some fields might be empty for certain banks.
+- Automatic categorization works best when transaction descriptions are consistent. 

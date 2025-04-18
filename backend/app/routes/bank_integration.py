@@ -138,6 +138,11 @@ async def truelayer_callback(
                     tx_formatted = truelayer_service.format_transaction(
                         tx_data, user.id, connection.id
                     )
+
+                    # Skip income transactions (amount >= 0)
+                    if tx_formatted["amount"] >= 0:
+                        continue # Skip this transaction
+
                     transaction = Transaction(**tx_formatted)
                     
                     # Attempt automatic categorization now based on merchant_name OR description
@@ -259,6 +264,11 @@ async def refresh_transactions(
                     tx_formatted = truelayer_service.format_transaction(
                         tx_data, current_user.id, connection.id
                     )
+
+                    # Skip income transactions (amount >= 0)
+                    if tx_formatted["amount"] >= 0:
+                        continue # Skip this transaction
+
                     transaction = Transaction(**tx_formatted)
                     
                     # Attempt automatic categorization now based on merchant_name OR description

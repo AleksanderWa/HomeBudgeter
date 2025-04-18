@@ -35,17 +35,30 @@ export default function useExpenses() {
     totalPages: 0
   })
 
-  const fetchExpenses = async (page = 1, pageSize = 100, month?: number, year?: number) => {
+  // Wrap fetchExpenses in useCallback to ensure stable function reference
+  const fetchExpenses = useCallback(async (page = 1, pageSize = 100, month?: number, year?: number, startDate?: string, endDate?: string) => {
     setLoading(true)
+    setError(''); // Clear previous errors
+    const params: Record<string, any> = {
+      page,
+      page_size: pageSize,
+    };
+    
+    // Prioritize start/end date over month/year
+    if (startDate) {
+      params.start_date = startDate;
+    }
+    if (endDate) {
+      params.end_date = endDate;
+    }
+    // Only add month/year if start/end date are not provided
+    if (!startDate && !endDate) {
+      if (month !== undefined) params.month = month;
+      if (year !== undefined) params.year = year;
+    }
+    
     try {
-      const response = await api.get<PaginatedExpenses>('/transactions', { 
-        params: { 
-          page, 
-          page_size: pageSize,
-          month,
-          year
-        } 
-      })
+      const response = await api.get<PaginatedExpenses>('/transactions', { params })
       
       setExpenses(response.data.transactions)
       setPagination({
@@ -55,12 +68,13 @@ export default function useExpenses() {
         totalPages: response.data.total_pages
       })
     } catch (err) {
+      console.error('Failed to fetch expenses:', err); // Log the actual error
       setError('Failed to fetch expenses')
-      setExpenses([])
+      setExpenses([]) // Clear expenses on error
     } finally {
       setLoading(false)
     }
-  }
+  }, []); // Empty dependency array ensures the function reference is stable
 
   const handleTransactionsUpdated = useCallback((event: CustomEvent) => {
     const { transactions } = event.detail;
@@ -68,14 +82,7 @@ export default function useExpenses() {
   }, []);
 
   useEffect(() => {
-    // Get current month and year for default filtering
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1; // 1-12
-    const currentYear = now.getFullYear();
-    
-    // Default to showing current month's transactions
-    fetchExpenses(1, 100, currentMonth, currentYear);
-
+    // Initial fetch logic is removed - components using the hook will trigger the initial fetch.
     // Add event listener for transaction updates
     window.addEventListener('transactionsUpdated', handleTransactionsUpdated as EventListener);
 
@@ -83,13 +90,13 @@ export default function useExpenses() {
     return () => {
       window.removeEventListener('transactionsUpdated', handleTransactionsUpdated as EventListener);
     }
-  }, [handleTransactionsUpdated])
+  }, [handleTransactionsUpdated]) // Removed fetchExpenses from dependencies
 
   return { 
     expenses, 
     loading, 
     error, 
     pagination,
-    refresh: fetchExpenses 
+    refresh: fetchExpenses // Return the memoized function
   }
 }

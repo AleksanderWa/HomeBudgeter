@@ -6,6 +6,14 @@ import Loader from '../UI/Loader.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 import api from '../../client/api/client.ts';
 import { useNavigate } from 'react-router-dom';
+import { 
+  HomeIcon, 
+  InformationCircleIcon, 
+  ChartPieIcon, 
+  ListBulletIcon, 
+  AdjustmentsHorizontalIcon,
+  CurrencyDollarIcon 
+} from '@heroicons/react/24/outline';
 
 const DashboardSummary = () => {
   const [plannedAmount, setPlannedAmount] = useState(0);
@@ -46,16 +54,28 @@ const DashboardSummary = () => {
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4">Dashboard Summary</h2>
+      <h2 className="text-xl font-bold mb-4 flex items-center">
+        <InformationCircleIcon className="w-6 h-6 mr-2 text-blue-500" />
+        Dashboard Summary
+      </h2>
       <p>This {monthNames[month - 1]} you planned <span className="font-semibold">{plannedAmount.toLocaleString()}</span> and already spent <span className="font-semibold">{spentAmount.toLocaleString()}</span>.</p>
       <p>Savings this month: <span className="font-semibold">{currentMonthSavings.toLocaleString()}</span></p>
       {/* <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p> */}
       
       <div className="mt-4 pt-4 border-t border-gray-200">
-        <h3 className="text-lg font-semibold mb-2">Spending Overview</h3>
-        <p>Spent today: <span className="font-semibold">{spentToday.toLocaleString()}</span></p>
-        <p>Spent this month: <span className="font-semibold">{spentThisMonth.toLocaleString()}</span></p>
-        <p>Spent this year: <span className="font-semibold">{spentThisYear.toLocaleString()}</span></p>
+        <h3 className="text-lg font-semibold mb-2 flex items-center">
+          <CurrencyDollarIcon className="w-5 h-5 mr-2 text-green-500" />
+          Spending Overview
+        </h3>
+        <p className="flex items-center text-sm text-gray-600">
+           Spent today: <span className="font-semibold ml-1">{spentToday.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+        </p>
+        <p className="flex items-center text-sm text-gray-600">
+           Spent this month: <span className="font-semibold ml-1">{spentThisMonth.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+        </p>
+        <p className="flex items-center text-sm text-gray-600">
+           Spent this year: <span className="font-semibold ml-1">{spentThisYear.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+        </p>
       </div>
     </div>
   );
@@ -162,43 +182,58 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+      {/* Remove icon temporarily to test layout */}
+      <h1 className="text-2xl font-bold mb-6">
+        {/* <HomeIcon className="w-7 h-7 mr-2 text-indigo-600" /> */}
+        Dashboard
+      </h1>
 
+      {/* Main content area */}
       {loading ? (
         <Loader />
       ) : (
         <div className="space-y-6">
           {/* Filtering controls */}
-          <div className="flex space-x-4 mb-4">
-            <select 
-              value={selectedYear || ''} 
-              onChange={handleYearChange}
-              className="p-2 border rounded"
-            >
-              <option value="">All Years</option>
-              {availableYears.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+             <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center">
+               <AdjustmentsHorizontalIcon className="w-6 h-6 mr-2 text-gray-500"/>
+               Filter Period
+             </h3>
+             <div className="flex space-x-4">
+              <select 
+                value={selectedYear || ''} 
+                onChange={handleYearChange}
+                className="p-2 border rounded text-sm flex-1 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">All Years</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
 
-            <select 
-              value={selectedMonth || ''} 
-              onChange={handleMonthChange}
-              disabled={selectedYear === null}
-              className={`p-2 border rounded ${selectedYear === null ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <option value="">All Months</option>
-              {[...Array(12)].map((_, index) => (
-                <option key={index + 1} value={index + 1}>
-                  {monthNames[index]}
-                </option>
-              ))}
-            </select>
+              <select 
+                value={selectedMonth || ''} 
+                onChange={handleMonthChange}
+                disabled={selectedYear === null}
+                className={`p-2 border rounded text-sm flex-1 focus:ring-indigo-500 focus:border-indigo-500 ${selectedYear === null ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <option value="">All Months</option>
+                {[...Array(12)].map((_, index) => (
+                  <option key={index + 1} value={index + 1}>
+                    {monthNames[index]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <DashboardSummary />
 
-          <div className="w-full max-w-4xl mx-auto">
+          <div className="w-full max-w-4xl mx-auto bg-white p-4 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+               <ChartPieIcon className="w-6 h-6 mr-2 text-purple-500" />
+               Expense Distribution
+            </h2>
             <ExpenseChart
               data={chartDataArray}
               excludeIncome={excludeIncome}
@@ -209,8 +244,9 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="w-full max-w-4xl mx-auto">
-            <h2 className="text-xl font-semibold mb-4">
+          <div className="w-full max-w-4xl mx-auto bg-white p-4 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <ListBulletIcon className="w-6 h-6 mr-2 text-teal-500" />
               Top {topLimit} Categories Transactions
             </h2>
             <ExpenseList 

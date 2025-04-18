@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional, List
 
@@ -262,6 +262,8 @@ def get_transactions(
     page_size: int = Query(100, ge=1, le=1000),
     month: Optional[int] = Query(None, ge=1, le=12),
     year: Optional[int] = Query(None, ge=1900, le=2100),
+    start_date: Optional[date] = Query(None, description="Filter transactions from this date onwards (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Filter transactions up to this date (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -272,6 +274,8 @@ def get_transactions(
     - `page_size`: Number of transactions per page (default 100, max 1000)
     - `month`: Optional filter for month (1-12)
     - `year`: Optional filter for year
+    - `start_date`: Optional start date filter (YYYY-MM-DD)
+    - `end_date`: Optional end date filter (YYYY-MM-DD)
 
     Returns a list of transactions sorted by operation date in descending order.
     Includes transactions even if they don't have a category assigned.
@@ -285,11 +289,19 @@ def get_transactions(
         .filter(Transaction.user_id == current_user.id)
     )
     
-    # Apply month and year filters if provided
-    if month is not None:
+    # Apply date filters
+    if start_date:
+        query = query.filter(Transaction.operation_date >= start_date)
+    if end_date:
+        query = query.filter(Transaction.operation_date <= end_date)
+    # Apply month and year filters only if start/end dates are not provided
+    elif month is not None:
         query = query.filter(extract('month', Transaction.operation_date) == month)
-    if year is not None:
-        query = query.filter(extract('year', Transaction.operation_date) == year)
+        if year is not None: # Apply year only if month is also specified
+            query = query.filter(extract('year', Transaction.operation_date) == year)
+    elif year is not None: # Apply year filter if only year is specified
+         query = query.filter(extract('year', Transaction.operation_date) == year)
+
     
     # Add ordering, pagination and execute
     transactions_query_result = (
@@ -324,11 +336,17 @@ def get_transactions(
 
     # Count total transactions with the same filters
     count_query = db.query(func.count(Transaction.id)).filter(Transaction.user_id == current_user.id)
-    if month is not None:
+    if start_date:
+        count_query = count_query.filter(Transaction.operation_date >= start_date)
+    if end_date:
+        count_query = count_query.filter(Transaction.operation_date <= end_date)
+    elif month is not None:
         count_query = count_query.filter(extract('month', Transaction.operation_date) == month)
-    if year is not None:
+        if year is not None:
+             count_query = count_query.filter(extract('year', Transaction.operation_date) == year)
+    elif year is not None:
         count_query = count_query.filter(extract('year', Transaction.operation_date) == year)
-    
+        
     total_transactions = count_query.scalar()
     total_pages = (total_transactions + page_size - 1) // page_size
 

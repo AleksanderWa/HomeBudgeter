@@ -27,6 +27,12 @@ const transitionStyles = {
   },
 };
 
+// Helper function to format date as YYYY-MM-DD
+const formatDateForAPI = (date: Date | null): string | undefined => {
+  if (!date) return undefined;
+  return date.toISOString().split('T')[0];
+};
+
 export default function ExpenseList({ 
   expenses: propExpenses, 
   hideFilters = false 
@@ -38,23 +44,25 @@ export default function ExpenseList({
     refresh 
   } = useExpenses();
   const [localExpenses, setLocalExpenses] = useState<any[]>([]);
-  const expenses = propExpenses || hookExpenses;
+  const expenses = propExpenses === undefined ? hookExpenses : propExpenses;
 
-  // Sync local expenses with hook expenses
   React.useEffect(() => {
     setLocalExpenses(expenses);
   }, [expenses]);
 
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const today = new Date();
+  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  
+  const [startDate, setStartDate] = useState<Date | null>(firstDayOfMonth);
+  const [endDate, setEndDate] = useState<Date | null>(lastDayOfMonth);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTransactionId, setSelectedTransactionId] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletedTransactionIds, setDeletedTransactionIds] = useState<string[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editedTransaction, setEditedTransaction] = useState<any>({
-    amount: 0,
-  });
+  const [editedTransaction, setEditedTransaction] = useState<any>({ amount: 0 });
   const [categories, setCategories] = useState<string[]>([]);
 
   // Fetch categories from the API
@@ -70,16 +78,24 @@ export default function ExpenseList({
     fetchCategories();
   }, []);
 
-  const filteredExpenses = useMemo(() => {
-    if (loading || error) return [];
+  // Fetch expenses when dates change or on initial load
+  useEffect(() => {
+    // Only fetch if not hiding filters (meaning this component controls fetching)
+    if (!hideFilters) {
+       refresh(1, 100, undefined, undefined, formatDateForAPI(startDate), formatDateForAPI(endDate));
+    }
+  }, [startDate, endDate, refresh, hideFilters]);
 
+  // Remove client-side date filtering, rely on API filtering
+  const filteredExpenses = useMemo(() => {
+    if (loading || error || !localExpenses) return []; // Add check for localExpenses
+
+    // Only apply search term filtering client-side
     return localExpenses.filter(expense => {
-      const matchesDate = (!startDate || new Date(expense.operation_date) >= startDate) &&
-                         (!endDate || new Date(expense.operation_date) <= endDate);
-      const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesDate && matchesSearch;
+      const matchesSearch = !searchTerm || expense.description.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch;
     });
-  }, [localExpenses, startDate, endDate, searchTerm, loading, error]);
+  }, [localExpenses, searchTerm, loading, error]);
 
   const handleDeleteTransaction = async () => {
     if (!selectedTransactionId) return;
@@ -123,23 +139,14 @@ export default function ExpenseList({
       amount: editedTransaction.amount,
       description: editedTransaction.description,
       operation_date: editedTransaction.operation_date,
-      // Send category name if category exists, otherwise handle appropriately (e.g., send null or specific value)
-      // The backend endpoint expects category_name based on TransactionEdit schema
-      category_name: editedTransaction.category?.name || null, // Sending null if category is null
-      user_id: editedTransaction.user_id // Assuming user_id is part of the transaction object
+      category_name: editedTransaction.category?.name || null, 
+      user_id: editedTransaction.user_id 
     };
-
-    // Remove fields not expected by the backend if necessary (like category object itself)
-    // delete payload.category; 
-    // delete payload.id;
 
     try {
       const transactionToUpdate = filteredExpenses[index];
-      // Make sure to send the correct transaction ID
       await api.put(`/transactions/${transactionToUpdate.id}`, payload);
       
-      // Update local state with the modified transaction
-      // Ensure the updated transaction reflects the potential null category
       const updatedExpense = { ...transactionToUpdate, ...payload };
       if (payload.category_name === null) {
         updatedExpense.category = null;
@@ -149,15 +156,14 @@ export default function ExpenseList({
             name: payload.category_name 
         };
       }
-      delete updatedExpense.category_name; // Clean up temporary field
+      delete updatedExpense.category_name; 
 
       setLocalExpenses(localExpenses.map((expense) => 
         expense.id === transactionToUpdate.id ? updatedExpense : expense
       ));
-      setEditingIndex(null); // Exit editing mode
+      setEditingIndex(null); 
     } catch (error) {
       console.error('Failed to save transaction', error);
-      // Potentially show an error message to the user
     }
   };
 
@@ -170,13 +176,11 @@ export default function ExpenseList({
 
   const handleCategoryChange = (index: number, categoryName: string) => {
     const updatedTransactions = [...localExpenses];
-    // If 'Uncategorized' is selected, set category to null
     if (categoryName === 'Uncategorized') {
       updatedTransactions[index].category = null;
     } else {
-      // Otherwise, create/update the category object
       updatedTransactions[index].category = { 
-        ...(updatedTransactions[index].category || {}), // Preserve existing id/user_id if editing existing
+        ...(updatedTransactions[index].category || {}),
         name: categoryName 
       };
     }
@@ -188,154 +192,233 @@ export default function ExpenseList({
     setEditedTransaction({ ...editedTransaction, amount: parseFloat(value) });
   };
 
-  if (loading) {
+  if (loading && !hideFilters) { // Only show top-level loading if this component is fetching
     return <div>Loading expenses...</div>;
   }
 
-  if (error) {
+  if (error && !hideFilters) { // Only show top-level error if this component is fetching
     return <div>Error loading expenses: {error}</div>;
   }
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-sm">
+    <div className="bg-white p-2 sm:p-4 rounded-lg shadow-sm">
       {!hideFilters && (
-        <div className="flex flex-col sm:flex-row gap-4 mb-4">
-          <div className="flex items-center gap-2 flex-1">
-            <div className="w-full">
-              <DatePicker
-                selected={startDate}
-                onChange={date => setStartDate(date)}
-                placeholderText="Start Date"
-                selectsStart
-                startDate={startDate}
-                endDate={endDate}
-                className="form-input w-full rounded-md text-sm"
-                dateFormat="yyyy-MM-dd"
-              />
+        <div className="mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 className="text-lg font-semibold mb-3 text-gray-700">Filter Transactions</h3>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Date Range Picker Section */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1">
+              <div className="w-full sm:w-1/2">
+                <label htmlFor="startDate" className="block text-sm font-medium text-gray-600 mb-1">Start Date</label>
+                <DatePicker
+                  id="startDate"
+                  icon={null}
+                  selected={startDate}
+                  onChange={date => setStartDate(date)}
+                  placeholderText="Start Date"
+                  selectsStart
+                  startDate={startDate}
+                  endDate={endDate}
+                  className="form-input w-full rounded-md text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                  dateFormat="yyyy-MM-dd"
+                />
+              </div>
+              <span className="text-gray-500 self-center hidden sm:block">to</span>
+              <div className="w-full sm:w-1/2">
+                <label htmlFor="endDate" className="block text-sm font-medium text-gray-600 mb-1">End Date</label>
+                <DatePicker
+                  id="endDate"
+                  icon={null}
+                  selected={endDate}
+                  onChange={date => setEndDate(date)}
+                  placeholderText="End Date"
+                  selectsEnd
+                  startDate={startDate}
+                  endDate={endDate}
+                  minDate={startDate}
+                  className="form-input w-full rounded-md text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                  dateFormat="yyyy-MM-dd"
+                />
+              </div>
             </div>
-            <span className="text-gray-500">to</span>
-            <div className="w-full">
-              <DatePicker
-                selected={endDate}
-                onChange={date => setEndDate(date)}
-                placeholderText="End Date"
-                selectsEnd
-                startDate={startDate}
-                endDate={endDate}
-                minDate={startDate}
-                className="form-input w-full rounded-md text-sm"
-                dateFormat="yyyy-MM-dd"
-              />
+            {/* Search Input Section */}
+            <div className="relative flex-1 w-full">
+              <label htmlFor="search" className="block text-sm font-medium text-gray-600 mb-1">Search</label>
+              <div className="relative">
+                <input
+                  id="search"
+                  type="text"
+                  placeholder="Search descriptions..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="form-input w-full pl-10 rounded-md text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                />
+                <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              </div>
             </div>
-          </div>
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Search transactions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-input w-full pl-8 rounded-md text-sm"
-            />
-            <MagnifyingGlassIcon className="w-4 h-4 absolute left-2 top-3 text-gray-400" />
           </div>
         </div>
       )}
 
-      {filteredExpenses.length === 0 ? (
-        <div className="text-center text-gray-500">No expenses found</div>
+      {(loading && !hideFilters) ? (
+        <div className="text-center text-gray-500 py-4">Loading...</div>
+      ) : filteredExpenses.length === 0 ? (
+        <div className="text-center text-gray-500 py-4">No expenses found for the selected period</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-sm border-b">
-                <th className="p-2">Date</th>
-                <th className="p-2">Description</th>
-                <th className="p-2">Category</th>
-                <th className="p-2 text-right">Amount</th>
-                <th className="p-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredExpenses.map((expense, index) => (
-                <tr 
-                  key={expense.id}
-                  className={`border-b hover:bg-gray-50 transition-all duration-700 ease-in-out 
-                    ${deletedTransactionIds.includes(expense.id) 
-                      ? 'opacity-0 transform -translate-x-full' 
-                      : 'opacity-100 transform translate-x-0'}`}
-                  style={{
-                    backgroundColor: deletedTransactionIds.includes(expense.id) 
-                      ? '#e73a2b' // A more intense red that's more visible
-                      : 'transparent'
-                  }}
-                >
-                  <td className="p-2 text-sm">{new Date(expense.operation_date).toLocaleDateString()}</td>
-                  <td className="p-2 text-sm break-words whitespace-normal max-w-xs">
-                    {editingIndex === index ? (
-                      <input
-                        type="text"
-                        value={expense.description}
-                        onChange={(e) => handleChange(index, e.target.value)}
-                        className="border p-2 w-full"
-                      />
-                    ) : (
-                      expense.description
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {editingIndex === index ? (
-                      <select
-                        value={expense.category?.name || ''}
-                        onChange={(e) => handleCategoryChange(index, e.target.value)}
-                        className="border p-2 w-full"
-                      >
-                        <option value="">Select Category</option>
-                        <option value="Uncategorized">Uncategorized</option>
-                        {categories.map((category) => (
-                          <option key={category} value={category}>{category}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+        <div>
+          {/* Table View for Medium Screens and Up */}
+          <div className="overflow-x-auto hidden sm:block">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-sm border-b">
+                  <th className="p-2 font-semibold">Date</th>
+                  <th className="p-2 font-semibold">Description</th>
+                  <th className="p-2 font-semibold">Category</th>
+                  <th className="p-2 text-right font-semibold">Amount</th>
+                  <th className="p-2 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredExpenses.map((expense, index) => (
+                  <tr 
+                    key={`table-${expense.id}`}
+                    className={`border-b hover:bg-gray-50 transition-all duration-700 ease-in-out 
+                      ${deletedTransactionIds.includes(expense.id) 
+                        ? 'opacity-0 transform -translate-x-full' 
+                        : 'opacity-100 transform translate-x-0'}`}
+                    style={{
+                      backgroundColor: deletedTransactionIds.includes(expense.id) 
+                        ? '#fee2e2' // Lighter red for table row hover effect
+                        : 'transparent'
+                    }}
+                  >
+                    {/* Table Cells - Standard layout */}
+                    <td className="p-2 text-sm">{new Date(expense.operation_date).toLocaleDateString()}</td>
+                    <td className="p-2 text-sm break-words whitespace-normal max-w-xs">
+                      {editingIndex === index ? (
+                        <input type="text" value={expense.description} onChange={(e) => handleChange(index, e.target.value)} className="border p-1 w-full text-sm" />
+                      ) : (
+                        expense.description
+                      )}
+                    </td>
+                    <td className="p-2">
+                      {editingIndex === index ? (
+                        <select value={expense.category?.name || ''} onChange={(e) => handleCategoryChange(index, e.target.value)} className="border p-1 w-full text-sm">
+                          <option value="">Select</option>
+                          <option value="Uncategorized">Uncategorized</option>
+                          {categories.map((category) => (<option key={category} value={category}>{category}</option>))}
+                        </select>
+                      ) : (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full whitespace-nowrap">
+                          {expense.category?.name || 'Uncategorized'}
+                        </span>
+                      )}
+                    </td>
+                    <td className={`p-2 text-right text-sm ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {editingIndex === index ? (
+                        <input type="number" value={editedTransaction.amount} onChange={(e) => handleAmountChange(e.target.value)} className="border p-1 w-full text-sm text-right" />
+                      ) : (
+                        expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                      )}
+                    </td>
+                    <td className="p-2 text-right">
+                       {/* Actions - Condensed for table */}
+                       <div className="flex justify-end items-center space-x-2">
+                        {editingIndex === index ? (
+                          <button onClick={() => handleSave(index)} title="Save">
+                            <CheckIcon className="w-5 h-5 text-green-500 hover:text-green-700" />
+                          </button>
+                        ) : (
+                          <button onClick={() => handleEdit(index)} title="Edit">
+                            <PencilIcon className="w-5 h-5 text-blue-500 hover:text-blue-700" />
+                          </button>
+                        )}
+                        {editingIndex !== index && (
+                          <button onClick={() => { setSelectedTransactionId(expense.id); setDeleteModalOpen(true); }} title="Delete">
+                            <TrashIcon className="w-5 h-5 text-red-500 hover:text-red-700" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Card View for Small Screens */}
+          <div className="block sm:hidden space-y-3">
+            {filteredExpenses.map((expense, index) => (
+              <div 
+                key={`card-${expense.id}`}
+                className={`p-3 border rounded-lg shadow-sm transition-all duration-700 ease-in-out 
+                  ${deletedTransactionIds.includes(expense.id) 
+                    ? 'opacity-0 transform -translate-x-full bg-red-100 border-red-300' 
+                    : 'opacity-100 transform translate-x-0 bg-white border-gray-200'}`}
+              >
+                {editingIndex === index ? (
+                   // Editing Card View
+                   <div className="space-y-2">
+                      <div>
+                         <label className="text-xs text-gray-500 block">Date</label>
+                         {/* Date editing might be complex, showing static for now */} 
+                         <p className="text-sm">{new Date(expense.operation_date).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                         <label className="text-xs text-gray-500 block">Description</label>
+                         <input type="text" value={editedTransaction.description} onChange={(e) => handleChange(index, e.target.value)} className="border p-1 w-full text-sm rounded" />
+                      </div>
+                      <div>
+                         <label className="text-xs text-gray-500 block">Category</label>
+                         <select value={editedTransaction.category?.name || ''} onChange={(e) => handleCategoryChange(index, e.target.value)} className="border p-1 w-full text-sm rounded">
+                            <option value="">Select Category</option>
+                            <option value="Uncategorized">Uncategorized</option>
+                            {categories.map((category) => (<option key={category} value={category}>{category}</option>))}
+                         </select>
+                      </div>
+                      <div>
+                         <label className="text-xs text-gray-500 block">Amount</label>
+                         <input type="number" value={editedTransaction.amount} onChange={(e) => handleAmountChange(e.target.value)} className="border p-1 w-full text-sm rounded text-right" />
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button onClick={() => handleSave(index)} className="p-1 text-green-600 hover:text-green-800" title="Save">
+                           <CheckIcon className="w-5 h-5" />
+                        </button>
+                         <button onClick={() => setEditingIndex(null)} className="p-1 ml-2 text-gray-500 hover:text-gray-700" title="Cancel">
+                            {/* Add a Cancel icon if desired, e.g., XMarkIcon */} 
+                            Cancel
+                        </button>
+                      </div>
+                   </div>
+                ) : (
+                  // Standard Card View
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 space-y-1 pr-2">
+                      <p className="text-sm font-medium text-gray-800 break-words">{expense.description}</p>
+                      <p className="text-xs text-gray-500">{new Date(expense.operation_date).toLocaleDateString()}</p>
+                      <span className={`px-1.5 py-0.5 text-xs rounded-full ${expense.category ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
                         {expense.category?.name || 'Uncategorized'}
                       </span>
-                    )}
-                  </td>
-                  <td className={`p-2 text-right text-sm ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {editingIndex === index ? (
-                      <input
-                        type="number"
-                        value={editedTransaction.amount}
-                        onChange={(e) => handleAmountChange(e.target.value)}
-                        className="border p-2 w-full"
-                      />
-                    ) : (
-                      expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                    )}
-                  </td>
-                  <td className="p-2 text-right">
-                    {editingIndex === index ? (
-                      <button onClick={() => handleSave(index)}>
-                        <CheckIcon className="w-5 h-5 text-green-500" />
-                      </button>
-                    ) : (
-                      <button onClick={() => handleEdit(index)}>
-                        <PencilIcon className="w-5 h-5 text-blue-500 mr-2" />
-                      </button>
-                    )}
-                    {editingIndex !== index && (
-                      <button onClick={() => {
-                        setSelectedTransactionId(expense.id);
-                        setDeleteModalOpen(true);
-                      }}>
-                        <TrashIcon className="w-5 h-5 text-red-500" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </div>
+                    <div className="text-right flex flex-col items-end space-y-1">
+                      <p className={`text-sm font-semibold ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                      </p>
+                      {/* Actions */}
+                      <div className="flex space-x-2">
+                         <button onClick={() => handleEdit(index)} title="Edit">
+                           <PencilIcon className="w-4 h-4 text-blue-500 hover:text-blue-700" />
+                         </button>
+                         <button onClick={() => { setSelectedTransactionId(expense.id); setDeleteModalOpen(true); }} title="Delete">
+                           <TrashIcon className="w-4 h-4 text-red-500 hover:text-red-700" />
+                         </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {deleteModalOpen && (

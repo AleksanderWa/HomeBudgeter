@@ -23,6 +23,8 @@ const DashboardSummary = () => {
   const [spentThisMonth, setSpentThisMonth] = useState(0);
   const [spentThisYear, setSpentThisYear] = useState(0);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [incomeDescription, setIncomeDescription] = useState("");
   const navigate = useNavigate();
 
   const monthNames = [
@@ -31,6 +33,8 @@ const DashboardSummary = () => {
   ];
 
   const currentMonthSavings = plannedAmount - spentAmount;
+  // Calculate balance (income - expenses)
+  const balance = monthlyIncome - plannedAmount;
 
   useEffect(() => {
     api.onUnauthorized = () => navigate('/login');
@@ -44,6 +48,25 @@ const DashboardSummary = () => {
         setSpentToday(response.data.spent_today);
         setSpentThisMonth(response.data.spent_this_month);
         setSpentThisYear(response.data.spent_this_year);
+        
+        // Fetch income data if a plan exists for this month
+        try {
+          const plansResponse = await api.get(`/plans/?year=${new Date().getFullYear()}`);
+          const currentPlan = plansResponse.data.find(plan => plan.month === month);
+          
+          if (currentPlan) {
+            const incomeResponse = await api.get(`/plans/${currentPlan.id}/income`);
+            setMonthlyIncome(incomeResponse.data.amount || 0);
+            setIncomeDescription(incomeResponse.data.description || "");
+          } else {
+            setMonthlyIncome(0);
+            setIncomeDescription("");
+          }
+        } catch (error) {
+          console.error('Failed to fetch income data', error);
+          setMonthlyIncome(0);
+          setIncomeDescription("");
+        }
       } catch (error) {
         console.error('Failed to fetch data', error);
       }
@@ -58,43 +81,70 @@ const DashboardSummary = () => {
         <InformationCircleIcon className="w-6 h-6 mr-2 text-indigo-500" />
         Dashboard Summary
       </h2>
-
-      {/* Spending Overview - Label removed */}
-      <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-indigo-100">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="p-2 bg-white rounded shadow-sm">
-            <p className="text-xs text-gray-500 mb-1">TODAY</p>
-            <p className="text-lg font-bold text-gray-800">
-              {spentToday.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-            </p>
+      
+      {/* Monthly Income Section */}
+      <div className="mb-6 p-4 border rounded-lg bg-white shadow-sm">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-semibold flex items-center">
+            <CurrencyDollarIcon className="w-5 h-5 mr-2 text-green-600" />
+            Monthly Income <span className="ml-2 text-red-400">{monthNames[month - 1]}</span>
+          </h2>
+          <button 
+            onClick={() => navigate('/planning')}
+            className="text-blue-600 hover:text-blue-800 flex items-center"
+          >
+            <ChartPieIcon className="w-5 h-5 mr-1" />
+            Go to Planning
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+            <p className="text-sm text-gray-600 mb-1">Monthly Income</p>
+            <p className="text-xl font-bold text-green-600">${monthlyIncome.toLocaleString()}</p>
           </div>
-          <div className="p-2 bg-white rounded shadow-sm">
-            <p className="text-xs text-gray-500 mb-1">THIS MONTH</p>
-            <p className="text-lg font-bold text-gray-800">
-              {spentThisMonth.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-            </p>
+          
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <p className="text-sm text-gray-600 mb-1">Planned Expenses</p>
+            <p className="text-xl font-bold text-blue-600">${plannedAmount.toLocaleString()}</p>
           </div>
-          <div className="p-2 bg-white rounded shadow-sm">
-            <p className="text-xs text-gray-500 mb-1">THIS YEAR</p>
-            <p className="text-lg font-bold text-gray-800">
-              {spentThisYear.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+          
+          <div className={`p-3 rounded-lg border ${balance >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+            <p className="text-sm text-gray-600 mb-1">Expected Balance</p>
+            <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${balance.toLocaleString()}
             </p>
           </div>
         </div>
+        
+        {incomeDescription && (
+          <div className="mt-3 text-sm text-gray-600">
+            <span className="font-medium">Note:</span> {incomeDescription}
+          </div>
+        )}
       </div>
-      
-      {/* Original summary information */}
-      <div className="mt-2 pt-2 border-t border-gray-200">
-        <div className="mt-3 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-          <p className="text-base">
-            This {monthNames[month - 1]} you planned <span className="text-xl font-bold text-blue-700">{plannedAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span> and already spent <span className="text-xl font-bold text-red-600">{spentAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
-          </p>
-          <p className="mt-2 text-base">
-            Savings this month: <span className={`text-xl font-bold ${currentMonthSavings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {currentMonthSavings.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-            </span>
-          </p>
-          {/* <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p> */}
+
+      {/* Spending Overview */}
+      <div className="mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">SPENT TODAY</p>
+            <p className="text-lg font-bold text-gray-800">
+              ${spentToday.toLocaleString()}
+            </p>
+          </div>
+          <div className="p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">SPENT THIS MONTH</p>
+            <p className="text-lg font-bold text-gray-800">
+              ${spentThisMonth.toLocaleString()}
+            </p>
+          </div>
+          <div className="p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+            <p className="text-xs text-gray-500 mb-1">SPENT THIS YEAR</p>
+            <p className="text-lg font-bold text-gray-800">
+              ${spentThisYear.toLocaleString()}
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -65,10 +65,10 @@ const Category = () => {
         />
         <button
           onClick={handleAddCategory}
-          className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md flex items-center"
+          className="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md flex items-center justify-center shadow-sm transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
-          <PlusIcon className="w-6 h-6 mr-1" />
-          Add Category
+          <PlusIcon className="w-5 h-5 mr-2" />
+          <span className="font-medium">Add Category</span>
         </button>
       </div>
       <div>
@@ -100,15 +100,39 @@ const Category = () => {
             setEditCategory({ id: category.id, name: category.name });
             setIsEditing(true);
           }}
-          className="text-blue-500 hover:text-blue-700"
+          className="text-blue-500 hover:text-blue-700 hidden sm:block"
         >
           <PencilIcon className="w-5 h-5" />
         </button>
       )}
       {!isEditing && (
-        <button onClick={() => handleDeleteCategory(category.id)} className="text-red-500 hover:text-red-700">
-          <TrashIcon className="w-5 h-5" />
-        </button>
+        <>
+          {/* Mobile view - Display text buttons on small screens */}
+          <div className="sm:hidden flex space-x-2">
+            <button
+              onClick={() => {
+                setEditCategory({ id: category.id, name: category.name });
+                setIsEditing(true);
+              }}
+              className="flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-offset-1"
+            >
+              <PencilIcon className="w-4 h-4 mr-1" /> 
+              Edit
+            </button>
+            <button 
+              onClick={() => handleDeleteCategory(category.id)} 
+              className="flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-medium text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-1 focus:ring-red-500 focus:ring-offset-1"
+            >
+              <TrashIcon className="w-4 h-4 mr-1" /> 
+              Delete
+            </button>
+          </div>
+          
+          {/* Desktop view - Icon-only button */}
+          <button onClick={() => handleDeleteCategory(category.id)} className="text-red-500 hover:text-red-700 hidden sm:block">
+            <TrashIcon className="w-5 h-5" />
+          </button>
+        </>
       )}
     </div>
   </div>

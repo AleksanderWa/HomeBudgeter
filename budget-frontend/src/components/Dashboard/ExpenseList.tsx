@@ -316,7 +316,7 @@ export default function ExpenseList({
                     </td>
                     <td className={`p-2 text-right text-sm ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {editingIndex === index ? (
-                        <input type="number" value={editedTransaction.amount} onChange={(e) => handleAmountChange(e.target.value)} className="border p-1 w-full text-sm text-right" />
+                        <input type="number" value={editedTransaction.amount} onChange={(e) => handleAmountChange(e.target.value)} className="border p-1 w-full text-sm rounded text-right" />
                       ) : (
                         expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
                       )}
@@ -380,41 +380,75 @@ export default function ExpenseList({
                          <label className="text-xs text-gray-500 block">Amount</label>
                          <input type="number" value={editedTransaction.amount} onChange={(e) => handleAmountChange(e.target.value)} className="border p-1 w-full text-sm rounded text-right" />
                       </div>
-                      <div className="flex justify-end pt-2">
-                        <button onClick={() => handleSave(index)} className="p-1 text-green-600 hover:text-green-800" title="Save">
-                           <CheckIcon className="w-5 h-5" />
+                      <div className="flex justify-end items-center pt-3 space-x-3">
+                        {/* Save Button */}
+                        <button
+                          onClick={() => handleSave(index)}
+                          className="flex items-center justify-center px-3 py-1.5 rounded-md bg-green-500 text-white hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                          title="Save"
+                        >
+                           <CheckIcon className="w-6 h-6" />
+                           <span className="ml-1 text-sm font-medium">Save</span>
                         </button>
-                         <button onClick={() => setEditingIndex(null)} className="p-1 ml-2 text-gray-500 hover:text-gray-700" title="Cancel">
-                            {/* Add a Cancel icon if desired, e.g., XMarkIcon */} 
-                            Cancel
+                        {/* Cancel Button */}
+                         <button
+                            onClick={() => setEditingIndex(null)}
+                            className="flex items-center justify-center px-3 py-1.5 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                            title="Cancel"
+                          >
+                            <span className="text-sm font-medium">Cancel</span>
                         </button>
                       </div>
                    </div>
                 ) : (
-                  // Standard Card View
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 space-y-1 pr-2">
-                      <p className="text-sm font-medium text-gray-800 break-words">{expense.description}</p>
-                      <p className="text-xs text-gray-500">{new Date(expense.operation_date).toLocaleDateString()}</p>
-                      <span className={`px-1.5 py-0.5 text-xs rounded-full ${expense.category ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
-                        {expense.category?.name || 'Uncategorized'}
-                      </span>
-                    </div>
-                    <div className="text-right flex flex-col items-end space-y-1">
-                      <p className={`text-sm font-semibold ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                      </p>
-                      {/* Actions */}
-                      <div className="flex space-x-2">
-                         <button onClick={() => handleEdit(index)} title="Edit">
-                           <PencilIcon className="w-4 h-4 text-blue-500 hover:text-blue-700" />
-                         </button>
-                         <button onClick={() => { setSelectedTransactionId(expense.id); setDeleteModalOpen(true); }} title="Delete">
-                           <TrashIcon className="w-4 h-4 text-red-500 hover:text-red-700" />
-                         </button>
+                  // Standard Card View - Actions moved to bottom
+                  <> { /* Use Fragment to group elements */}
+                    <div className="flex justify-between items-start">
+                      {/* Left side content (Description and Date) */}
+                      <div className="flex-1 space-y-1 pr-2">
+                        <p className="text-sm font-medium text-gray-800 break-words">{expense.description}</p>
+                        <p className="text-sm text-gray-600">{new Date(expense.operation_date).toLocaleDateString()}</p>
+                      </div>
+                      {/* Right side content (Amount only) */}
+                      <div className="text-right flex flex-col items-end">
+                        <p className={`text-sm font-semibold ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {expense.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                        </p>
                       </div>
                     </div>
-                  </div>
+                    {/* Category and Actions on the same line */}
+                    <div className="flex justify-between items-center mt-2">
+                      {/* Category with bubble-like appearance */}
+                      <span className={`inline-block px-3 py-1.5 text-xs rounded-full shadow-sm ${
+                        expense.category 
+                          ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200' 
+                          : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+                      }`}>
+                        {expense.category?.name || 'Uncategorized'}
+                      </span>
+                      {/* Actions aligned right */}
+                      <div className="flex space-x-2">
+                        {/* Edit Button with Text */}
+                        <button 
+                          onClick={() => handleEdit(index)} 
+                          title="Edit" 
+                          className="flex items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                        >
+                          <PencilIcon className="w-4 h-4 mr-1" /> 
+                          Edit
+                        </button>
+                        {/* Delete Button with Text */}
+                        <button 
+                          onClick={() => { setSelectedTransactionId(expense.id); setDeleteModalOpen(true); }} 
+                          title="Delete" 
+                          className="flex items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                        >
+                          <TrashIcon className="w-4 h-4 mr-1" /> 
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             ))}

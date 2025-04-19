@@ -12,7 +12,8 @@ import {
   ChartPieIcon, 
   ListBulletIcon, 
   AdjustmentsHorizontalIcon,
-  CurrencyDollarIcon 
+  CurrencyDollarIcon,
+  QuestionMarkCircleIcon 
 } from '@heroicons/react/24/outline';
 
 const DashboardSummary = () => {
@@ -25,6 +26,7 @@ const DashboardSummary = () => {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [monthlyIncome, setMonthlyIncome] = useState(0);
   const [incomeDescription, setIncomeDescription] = useState("");
+  const [showTooltip, setShowTooltip] = useState(false);
   const navigate = useNavigate();
 
   const monthNames = [
@@ -75,6 +77,23 @@ const DashboardSummary = () => {
     fetchData();
   }, [month, navigate]);
 
+  const handleInfoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowTooltip(!showTooltip);
+  };
+
+  // Click outside to close tooltip
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (showTooltip) setShowTooltip(false);
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showTooltip]);
+
   return (
     <div className="p-4 bg-white rounded-lg shadow-md">
       <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-700">
@@ -98,7 +117,7 @@ const DashboardSummary = () => {
           </button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="p-3 bg-green-50 rounded-lg border border-green-100">
             <p className="text-sm text-gray-600 mb-1">Monthly Income</p>
             <p className="text-xl font-bold text-green-600">${monthlyIncome.toLocaleString()}</p>
@@ -109,8 +128,27 @@ const DashboardSummary = () => {
             <p className="text-xl font-bold text-blue-600">${plannedAmount.toLocaleString()}</p>
           </div>
           
+          <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+            <p className="text-sm text-gray-600 mb-1">REAL EXPENSES</p>
+            <p className="text-xl font-bold text-red-600">${spentThisMonth.toLocaleString()}</p>
+          </div>
+          
           <div className={`p-3 rounded-lg border ${balance >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-            <p className="text-sm text-gray-600 mb-1">Expected Balance</p>
+            <p className="text-sm text-gray-600 mb-1 flex items-center">
+              Balance
+              <span className="relative ml-1" onClick={handleInfoClick}>
+                <InformationCircleIcon 
+                  className="w-4 h-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onMouseEnter={() => setShowTooltip(true)}
+                  onMouseLeave={() => setShowTooltip(false)}
+                />
+                {showTooltip && (
+                  <span className="absolute bg-gray-800 text-white text-xs rounded p-2 w-48 z-10 -mt-1 ml-2">
+                    Expected Balance = Monthly Income - Planned Expenses
+                  </span>
+                )}
+              </span>
+            </p>
             <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               ${balance.toLocaleString()}
             </p>

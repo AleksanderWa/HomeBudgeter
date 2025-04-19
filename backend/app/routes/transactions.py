@@ -264,6 +264,7 @@ def get_transactions(
     year: Optional[int] = Query(None, ge=1900, le=2100),
     start_date: Optional[date] = Query(None, description="Filter transactions from this date onwards (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="Filter transactions up to this date (YYYY-MM-DD)"),
+    category_id: Optional[int] = Query(None, description="Filter transactions by category ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -280,47 +281,42 @@ def get_transactions(
     Returns a list of transactions sorted by operation date in descending order.
     Includes transactions even if they don't have a category assigned.
     """
-    offset = (page - 1) * page_size
+    # Calculate skip for pagination
+    skip = (page - 1) * page_size
 
-    # Build base query with outer join for categories
-    query = (
-        db.query(Transaction, Category)
-        .outerjoin(Category, Transaction.category_id == Category.id)
-        .filter(Transaction.user_id == current_user.id)
-    )
-    
-    # Apply date filters
+    # Start building the query
+    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+
+    # Apply filters if provided
+    if month:
+        query = query.filter(extract("month", Transaction.operation_date) == month)
+    if year:
+        query = query.filter(extract("year", Transaction.operation_date) == year)
     if start_date:
         query = query.filter(Transaction.operation_date >= start_date)
     if end_date:
         query = query.filter(Transaction.operation_date <= end_date)
-    # Apply month and year filters only if start/end dates are not provided
-    elif month is not None:
-        query = query.filter(extract('month', Transaction.operation_date) == month)
-        if year is not None: # Apply year only if month is also specified
-            query = query.filter(extract('year', Transaction.operation_date) == year)
-    elif year is not None: # Apply year filter if only year is specified
-         query = query.filter(extract('year', Transaction.operation_date) == year)
+    if category_id:
+        query = query.filter(Transaction.category_id == category_id)
 
-    
     # Add ordering, pagination and execute
     transactions_query_result = (
         query
         .order_by(desc(Transaction.operation_date))
-        .offset(offset)
+        .offset(skip)
         .limit(page_size)
         .all()
     )
 
     # Transform the query results to match the TransactionResponse model, handling null categories
     transactions_response_list = []
-    for transaction, category in transactions_query_result:
+    for transaction in transactions_query_result:
         category_data = None
-        if category:
+        if transaction.category_id:
             category_data = CategoryInTransaction(
-                id=category.id,
-                name=category.name,
-                user_id=category.user_id
+                id=transaction.category_id,
+                name=transaction.category.name,
+                user_id=transaction.user_id
             )
         
         transactions_response_list.append(

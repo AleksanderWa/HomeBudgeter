@@ -293,3 +293,19 @@ class CategoryLimitCreate(BaseModel):
 
 class TransactionCategoryUpdate(BaseModel):
     category_id: int
+
+
+class PlanIncomeCreate(BaseModel):
+    amount: float
+    description: Optional[str] = None
+
+
+class PlanIncomeResponse(BaseModel):
+    id: int
+    plan_id: int
+    user_id: int
+    amount: float
+    description: Optional[str] = None
+    
+    class Config:
+        orm_mode = True

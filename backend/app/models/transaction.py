@@ -71,6 +71,7 @@ class Plan(Base):
 
     user = relationship('User', back_populates='plans')
     category_limits = relationship('CategoryLimit', back_populates='plan')
+    incomes = relationship('PlanIncome', back_populates='plan')
 
 
 class CategoryLimit(Base):
@@ -89,3 +90,22 @@ class CategoryLimit(Base):
     plan = relationship('Plan', back_populates='category_limits')
     category = relationship('Category', back_populates='category_limits')
     user = relationship('User', back_populates='category_limits')
+
+
+class PlanIncome(Base):
+    __tablename__ = 'plan_incomes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey('plans.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    amount = Column(DECIMAL(precision=10, scale=2), nullable=False, default=0)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    plan = relationship('Plan', back_populates='incomes')
+    user = relationship('User', back_populates='plan_incomes')
+
+    __table_args__ = (
+        UniqueConstraint('plan_id', 'user_id', name='_plan_user_income_uc'),
+    )

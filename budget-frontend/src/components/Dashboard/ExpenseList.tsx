@@ -64,6 +64,8 @@ export default function ExpenseList({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedTransaction, setEditedTransaction] = useState<any>({ amount: 0 });
   const [categories, setCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryObjects, setCategoryObjects] = useState<any[]>([]);
 
   // Handler for Add Transaction button
   const handleAddTransaction = () => {
@@ -71,12 +73,17 @@ export default function ExpenseList({
     window.dispatchEvent(new CustomEvent('openAddTransactionModal'));
   };
 
-  // Fetch categories from the API
+  // Fetch categories from the API - updated to fetch full category objects
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get('/transactions/categories?only_names=true');
-        setCategories(response.data.categories);
+        const response = await api.get('/transactions/categories?only_names=false');
+        if (response.data.categories) {
+          // Store full category objects for filtering
+          setCategoryObjects(response.data.categories);
+          // Keep name-only array for category dropdowns
+          setCategories(response.data.categories.map((cat: any) => cat.name));
+        }
       } catch (error) {
         console.error('Failed to fetch categories', error);
       }
@@ -84,13 +91,23 @@ export default function ExpenseList({
     fetchCategories();
   }, []);
 
-  // Fetch expenses when dates change or on initial load
+  // Fetch expenses when dates or category changes
   useEffect(() => {
     // Only fetch if not hiding filters (meaning this component controls fetching)
     if (!hideFilters) {
-       refresh(1, 100, undefined, undefined, formatDateForAPI(startDate), formatDateForAPI(endDate));
+      // Find the selected category id
+      let categoryId = null;
+      if (selectedCategory) {
+        const categoryObj = categoryObjects.find(cat => cat.name === selectedCategory);
+        categoryId = categoryObj ? categoryObj.id : null;
+      }
+      refresh(1, 100, undefined, undefined, 
+        formatDateForAPI(startDate), 
+        formatDateForAPI(endDate),
+        categoryId
+      );
     }
-  }, [startDate, endDate, refresh, hideFilters]);
+  }, [startDate, endDate, selectedCategory, refresh, hideFilters, categoryObjects]);
 
   // Remove client-side date filtering, rely on API filtering
   const filteredExpenses = useMemo(() => {
@@ -259,6 +276,23 @@ export default function ExpenseList({
                 />
               </div>
             </div>
+            
+            {/* Category Filter Dropdown */}
+            <div className="relative flex-1">
+              <label htmlFor="categoryFilter" className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+              <select
+                id="categoryFilter"
+                value={selectedCategory || ''}
+                onChange={(e) => setSelectedCategory(e.target.value || null)}
+                className="form-select w-full rounded-md text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+              >
+                <option value="">All Categories</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+            
             {/* Search Input Section */}
             <div className="relative flex-1 w-full">
               <label htmlFor="search" className="block text-sm font-medium text-gray-600 mb-1">Search</label>

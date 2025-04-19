@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional, List
 
 from backend.app.database.database import get_db
-from backend.app.models.transaction import Transaction, Category, Plan, CategoryLimit
+from backend.app.models.transaction import Transaction, Category, Plan, CategoryLimit, PlanIncome
 from backend.app.models.user import User
 from backend.app.schemas.schemas import (
     CategoryResponse,
@@ -20,6 +20,8 @@ from backend.app.schemas.schemas import (
     PlanResponse,
     CategoryLimitResponse,
     CategoryLimitCreate,  # Added CategoryLimitCreate
+    PlanIncomeCreate,
+    PlanIncomeResponse,
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -226,4 +228,111 @@ async def delete_category_limit(
         raise HTTPException(status_code=404, detail="Category limit not found")
 
     db.delete(db_category_limit)
+    db.commit()
+
+
+@router.post("/{plan_id}/income", response_model=PlanIncomeResponse)
+async def create_or_update_plan_income(
+    plan_id: int,
+    income_data: PlanIncomeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Check if plan exists and belongs to user
+    db_plan = db.query(Plan).filter(
+        Plan.id == plan_id, 
+        Plan.user_id == current_user.id
+    ).first()
+    
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    # Check if income record already exists for this plan
+    existing_income = db.query(PlanIncome).filter(
+        PlanIncome.plan_id == plan_id,
+        PlanIncome.user_id == current_user.id
+    ).first()
+    
+    if existing_income:
+        # Update existing income
+        existing_income.amount = income_data.amount
+        if income_data.description is not None:
+            existing_income.description = income_data.description
+        db.commit()
+        db.refresh(existing_income)
+        return existing_income
+    else:
+        # Create new income record
+        new_income = PlanIncome(
+            plan_id=plan_id,
+            user_id=current_user.id,
+            amount=income_data.amount,
+            description=income_data.description
+        )
+        db.add(new_income)
+        db.commit()
+        db.refresh(new_income)
+        return new_income
+
+
+@router.get("/{plan_id}/income", response_model=PlanIncomeResponse)
+async def get_plan_income(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Check if plan exists and belongs to user
+    db_plan = db.query(Plan).filter(
+        Plan.id == plan_id, 
+        Plan.user_id == current_user.id
+    ).first()
+    
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    # Get income for this plan
+    income = db.query(PlanIncome).filter(
+        PlanIncome.plan_id == plan_id,
+        PlanIncome.user_id == current_user.id
+    ).first()
+    
+    if not income:
+        # Return a default empty income
+        return {
+            "id": 0,
+            "plan_id": plan_id,
+            "user_id": current_user.id,
+            "amount": 0.0,
+            "description": None
+        }
+    
+    return income
+
+
+@router.delete("/{plan_id}/income", status_code=204)
+async def delete_plan_income(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Check if plan exists and belongs to user
+    db_plan = db.query(Plan).filter(
+        Plan.id == plan_id, 
+        Plan.user_id == current_user.id
+    ).first()
+    
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    # Find income for this plan
+    income = db.query(PlanIncome).filter(
+        PlanIncome.plan_id == plan_id,
+        PlanIncome.user_id == current_user.id
+    ).first()
+    
+    if not income:
+        raise HTTPException(status_code=404, detail="Income not found")
+    
+    # Delete the income
+    db.delete(income)
     db.commit()

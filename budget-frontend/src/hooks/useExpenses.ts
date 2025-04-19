@@ -36,7 +36,15 @@ export default function useExpenses() {
   })
 
   // Wrap fetchExpenses in useCallback to ensure stable function reference
-  const fetchExpenses = useCallback(async (page = 1, pageSize = 100, month?: number, year?: number, startDate?: string, endDate?: string) => {
+  const fetchExpenses = useCallback(async (
+    page = 1, 
+    pageSize = 100, 
+    month?: number, 
+    year?: number, 
+    startDate?: string, 
+    endDate?: string,
+    categoryId?: number | null
+  ) => {
     setLoading(true)
     setError(''); // Clear previous errors
     const params: Record<string, any> = {
@@ -55,6 +63,11 @@ export default function useExpenses() {
     if (!startDate && !endDate) {
       if (month !== undefined) params.month = month;
       if (year !== undefined) params.year = year;
+    }
+    
+    // Add category filter
+    if (categoryId) {
+      params.category_id = categoryId;
     }
     
     try {

@@ -12,3 +12,4 @@ class User(Base):
     plans = relationship('Plan', back_populates='user')
     category_limits = relationship('CategoryLimit', back_populates='user')
     bank_connections = relationship('BankConnection', backref='user')
+    plan_incomes = relationship('PlanIncome', back_populates='user')

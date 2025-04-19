@@ -109,8 +109,7 @@ async def truelayer_callback(
         # Set from_date based on the most recent transaction
         from_date = None
         if most_recent_transaction and most_recent_transaction.operation_date:
-            # Start from one day after the most recent transaction to avoid duplicates
-            from_date = (most_recent_transaction.operation_date + timedelta(days=1)).isoformat()
+            from_date = most_recent_transaction.operation_date.isoformat()
             print(f"Fetching transactions from {from_date} onwards")
 
         # Import transactions for all accounts
@@ -213,7 +212,7 @@ async def refresh_transactions(
     from_date = None
     if most_recent_transaction and most_recent_transaction.operation_date:
         # Add one day to avoid duplicates (but still catch same-day transactions that came in later)
-        from_date = (most_recent_transaction.operation_date + timedelta(days=1)).isoformat()
+        from_date = most_recent_transaction.operation_date.isoformat()
         print(f"Fetching transactions from {from_date} onwards")
 
     # Check if token is expired

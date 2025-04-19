@@ -3,9 +3,10 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon, PlusIcon, ChartPieIcon } from '@heroicons/react/24/outline';
 import useExpenses from '../../hooks/useExpenses.ts';
 import api from '../../client/api/client.ts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface ExpenseListProps {
   expenses?: any[];
@@ -45,6 +46,7 @@ export default function ExpenseList({
   } = useExpenses();
   const [localExpenses, setLocalExpenses] = useState<any[]>([]);
   const expenses = propExpenses === undefined ? hookExpenses : propExpenses;
+  const [excludeIncome, setExcludeIncome] = useState(false);
 
   React.useEffect(() => {
     setLocalExpenses(expenses);
@@ -119,6 +121,31 @@ export default function ExpenseList({
       return matchesSearch;
     });
   }, [localExpenses, searchTerm, loading, error]);
+
+  // Process data for chart
+  const chartData = useMemo(() => {
+    if (!filteredExpenses || filteredExpenses.length === 0) return {};
+    
+    return filteredExpenses.reduce((acc, expense) => {
+      const categoryName = expense.category?.name || 'Uncategorized';
+      if (!acc[categoryName]) {
+        acc[categoryName] = 0;
+      }
+      acc[categoryName] += expense.amount;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [filteredExpenses]);
+
+  const chartDataArray = useMemo(() => 
+    Object.entries(chartData)
+      .map(([category, amount]) => ({ 
+        category, 
+        amount,
+        // Add absolute amount for display purposes
+        absAmount: Math.abs(amount)
+      }))
+      .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
+  , [chartData]);
 
   const handleDeleteTransaction = async () => {
     if (!selectedTransactionId) return;
@@ -307,6 +334,41 @@ export default function ExpenseList({
                 />
                 <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Distribution Chart */}
+      {filteredExpenses.length > 0 && !hideFilters && (
+        <div className="mb-6">
+          <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold flex items-center">
+                <ChartPieIcon className="w-6 h-6 mr-2 text-purple-600" />
+                Expense Distribution
+              </h3>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={excludeIncome}
+                  onChange={() => setExcludeIncome(!excludeIncome)}
+                  className="form-checkbox h-4 w-4"
+                />
+                <span className="text-sm">Exclude Income</span>
+              </label>
+            </div>
+            <div className="h-64 sm:h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartDataArray.filter(d => excludeIncome ? d.amount < 0 : true)}>
+                  <XAxis dataKey="category" tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 12)}...` : value} />
+                  <YAxis tickFormatter={(value) => `$${Math.abs(value)}`} />
+                  <Tooltip 
+                    formatter={(value) => `$${Math.abs(Number(value)).toLocaleString()}`}
+                  />
+                  <Bar dataKey="absAmount" fill="#4F46E5" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>

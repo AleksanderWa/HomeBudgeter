@@ -136,6 +136,13 @@ export default function Dashboard() {
     }
   }, [shouldRefresh, selectedMonth, selectedYear, refresh]);
   
+  // Initial data load
+  useEffect(() => {
+    // Fetch data on initial mount
+    refresh(1, 100, selectedMonth, selectedYear);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
   // Filter expenses by year and month - this client-side filtering is still useful
   // in case the API returns more data than just the current selection
   const filteredExpenses = useMemo(() => {

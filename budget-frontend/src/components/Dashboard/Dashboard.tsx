@@ -54,28 +54,48 @@ const DashboardSummary = () => {
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4 flex items-center">
-        <InformationCircleIcon className="w-6 h-6 mr-2 text-blue-500" />
+      <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-700">
+        <InformationCircleIcon className="w-6 h-6 mr-2 text-indigo-500" />
         Dashboard Summary
       </h2>
-      <p>This {monthNames[month - 1]} you planned <span className="font-semibold">{plannedAmount.toLocaleString()}</span> and already spent <span className="font-semibold">{spentAmount.toLocaleString()}</span>.</p>
-      <p>Savings this month: <span className="font-semibold">{currentMonthSavings.toLocaleString()}</span></p>
-      {/* <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p> */}
+
+      {/* Spending Overview - Label removed */}
+      <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-indigo-100">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="p-2 bg-white rounded shadow-sm">
+            <p className="text-xs text-gray-500 mb-1">TODAY</p>
+            <p className="text-lg font-bold text-gray-800">
+              {spentToday.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </p>
+          </div>
+          <div className="p-2 bg-white rounded shadow-sm">
+            <p className="text-xs text-gray-500 mb-1">THIS MONTH</p>
+            <p className="text-lg font-bold text-gray-800">
+              {spentThisMonth.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </p>
+          </div>
+          <div className="p-2 bg-white rounded shadow-sm">
+            <p className="text-xs text-gray-500 mb-1">THIS YEAR</p>
+            <p className="text-lg font-bold text-gray-800">
+              {spentThisYear.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </p>
+          </div>
+        </div>
+      </div>
       
-      <div className="mt-4 pt-4 border-t border-gray-200">
-        <h3 className="text-lg font-semibold mb-2 flex items-center">
-          <CurrencyDollarIcon className="w-5 h-5 mr-2 text-green-500" />
-          Spending Overview
-        </h3>
-        <p className="flex items-center text-sm text-gray-600">
-           Spent today: <span className="font-semibold ml-1">{spentToday.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
-        </p>
-        <p className="flex items-center text-sm text-gray-600">
-           Spent this month: <span className="font-semibold ml-1">{spentThisMonth.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
-        </p>
-        <p className="flex items-center text-sm text-gray-600">
-           Spent this year: <span className="font-semibold ml-1">{spentThisYear.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
-        </p>
+      {/* Original summary information */}
+      <div className="mt-2 pt-2 border-t border-gray-200">
+        <div className="mt-3 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <p className="text-base">
+            This {monthNames[month - 1]} you planned <span className="text-xl font-bold text-blue-700">{plannedAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span> and already spent <span className="text-xl font-bold text-red-600">{spentAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+          </p>
+          <p className="mt-2 text-base">
+            Savings this month: <span className={`text-xl font-bold ${currentMonthSavings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {currentMonthSavings.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </span>
+          </p>
+          {/* <p>Total savings this year: <span className="font-semibold">{totalSavings.toLocaleString()}</span></p> */}
+        </div>
       </div>
     </div>
   );
@@ -183,8 +203,8 @@ export default function Dashboard() {
   return (
     <div className="container mx-auto p-4">
       {/* Remove icon temporarily to test layout */}
-      <h1 className="text-2xl font-bold mb-6">
-        {/* <HomeIcon className="w-7 h-7 mr-2 text-indigo-600" /> */}
+      <h1 className="text-2xl font-bold mb-6 flex items-center">
+        <HomeIcon className="w-6 h-6 mr-2 text-indigo-600" />
         Dashboard
       </h1>
 
@@ -193,7 +213,10 @@ export default function Dashboard() {
         <Loader />
       ) : (
         <div className="space-y-6">
-          {/* Filtering controls */}
+          {/* Dashboard Summary - Moved to the top */}
+          <DashboardSummary />
+
+          {/* Filtering controls - Moved below summary */}
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
              <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center">
                <AdjustmentsHorizontalIcon className="w-6 h-6 mr-2 text-gray-500"/>
@@ -226,8 +249,6 @@ export default function Dashboard() {
               </select>
             </div>
           </div>
-
-          <DashboardSummary />
 
           <div className="w-full max-w-4xl mx-auto bg-white p-4 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 flex items-center">

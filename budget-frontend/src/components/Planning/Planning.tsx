@@ -106,7 +106,6 @@ const Planning = () => {
 
         const updatedLimit = {
             category_id: selectedCategoryId,
-            plan_id: selectedPlanId,
             limit: parseFloat(limit)
         };
 

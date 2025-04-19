@@ -60,9 +60,10 @@ async def get_plans(
     return [PlanResponse(id=plan.id, month=plan.month, year=plan.year, user_id=plan.user_id) for plan in plans]
 
 
-@router.put("/category_limits/", response_model=CategoryLimitResponse)
+@router.put("/{plan_id}/category_limits/", response_model=CategoryLimitResponse)
 async def update_category_limit(
-    category_limit: CreateCategoryLimit,
+    plan_id: int,
+    category_limit: CategoryLimitCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -70,7 +71,7 @@ async def update_category_limit(
     db_category_limit = db.query(CategoryLimit).filter(
         CategoryLimit.category_id == category_limit.category_id,
         CategoryLimit.user_id == current_user.id,
-        CategoryLimit.plan_id == category_limit.plan_id
+        CategoryLimit.plan_id == plan_id
     ).first()
 
     if db_category_limit:
@@ -81,7 +82,7 @@ async def update_category_limit(
         db_category_limit = CategoryLimit(
             category_id=category_limit.category_id,
             user_id=current_user.id,
-            plan_id=category_limit.plan_id,
+            plan_id=plan_id,
             limit=category_limit.limit
         )
         db.add(db_category_limit)

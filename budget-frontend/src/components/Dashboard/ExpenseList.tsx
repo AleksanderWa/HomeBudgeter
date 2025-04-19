@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon, PlusIcon } from '@heroicons/react/24/outline';
 import useExpenses from '../../hooks/useExpenses.ts';
 import api from '../../client/api/client.ts';
 
@@ -64,6 +64,12 @@ export default function ExpenseList({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedTransaction, setEditedTransaction] = useState<any>({ amount: 0 });
   const [categories, setCategories] = useState<string[]>([]);
+
+  // Handler for Add Transaction button
+  const handleAddTransaction = () => {
+    // Dispatch a global event that Navigation.tsx can listen for
+    window.dispatchEvent(new CustomEvent('openAddTransactionModal'));
+  };
 
   // Fetch categories from the API
   useEffect(() => {
@@ -202,6 +208,18 @@ export default function ExpenseList({
 
   return (
     <div className="bg-white p-2 sm:p-4 rounded-lg shadow-sm">
+      {/* Add Transaction Button */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Transactions</h2>
+        <button
+          onClick={handleAddTransaction}
+          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+        >
+          <PlusIcon className="w-5 h-5 mr-1" />
+          Add Transaction
+        </button>
+      </div>
+      
       {!hideFilters && (
         <div className="mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
           <h3 className="text-lg font-semibold mb-3 text-gray-700">Filter Transactions</h3>

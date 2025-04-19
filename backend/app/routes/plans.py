@@ -129,9 +129,52 @@ async def get_category_limits(
 async def create_category_limit(
     plan_id: int,
     category_limit: CategoryLimitCreate,
+    month: Optional[int] = Query(None, description="Month for creating a new plan if plan_id doesn't exist"),
+    year: Optional[int] = Query(None, description="Year for creating a new plan if plan_id doesn't exist"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Special case: plan_id=0 means we always want to create a new plan
+    if plan_id == 0:
+        if month is None or year is None:
+            current_date = datetime.now()
+            month = month or current_date.month
+            year = year or current_date.year
+            
+        # Create new plan
+        new_plan = Plan(
+            month=month,
+            year=year,
+            user_id=current_user.id
+        )
+        db.add(new_plan)
+        db.commit()
+        db.refresh(new_plan)
+        plan_id = new_plan.id
+    else:
+        # Check if the specified plan exists
+        db_plan = db.query(Plan).filter(Plan.id == plan_id, Plan.user_id == current_user.id).first()
+        
+        # If plan doesn't exist, create a new one
+        if not db_plan:
+            # If month and year are provided, use them; otherwise use current date
+            if month is None or year is None:
+                current_date = datetime.now()
+                month = month or current_date.month
+                year = year or current_date.year
+            
+            # Create new plan
+            new_plan = Plan(
+                month=month,
+                year=year,
+                user_id=current_user.id
+            )
+            db.add(new_plan)
+            db.commit()
+            db.refresh(new_plan)
+            plan_id = new_plan.id
+    
+    # Now check if the category limit already exists
     db_category_limit = (
         db.query(CategoryLimit)
         .filter(

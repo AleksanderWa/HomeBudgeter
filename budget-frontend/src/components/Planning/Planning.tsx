@@ -27,39 +27,39 @@ const Planning = () => {
     const today = new Date();
     const formattedDate = `${today.getDate()} / ${today.getMonth() + 1} / ${today.getFullYear()}`;
 
+    const fetchCategories = async (month?: number) => {
+        try {
+            const response = await api.get('/transactions/categories', {
+                params: { month: month || selectedMonth },
+            });
+            setCategories(response.data.categories);
+        } catch (error) {
+            console.error('Failed to fetch categories', error);
+        }
+    };
+
+    const fetchPlans = async () => {
+        const currentYear = new Date().getFullYear();
+        const response = await api.get(`/plans/?year=${currentYear}`);
+        setPlans(response.data);
+
+        if (response.data.length > 0) {
+            const selectedPlan = response.data.find(plan => plan.month === selectedMonth);
+            if (selectedPlan) {
+                setSelectedPlanId(selectedPlan.id);
+                // Fetch category limits for the selected plan
+                const limitsResponse = await api.get(`/plans/${selectedPlan.id}/category_limits`);
+                const limits = limitsResponse.data.reduce((acc, limit) => {
+                    acc[limit.category_id] = limit.limit;
+                    return acc;
+                }, {});
+                setBudgetLimits(limits);
+                console.log('Budget limits:', limits)
+            }
+        }
+    };
+
     useEffect(() => {
-        const fetchCategories = async (month?: number) => {
-            try {
-                const response = await api.get('/transactions/categories', {
-                    params: { month: month || selectedMonth },
-                });
-                setCategories(response.data.categories);
-            } catch (error) {
-                console.error('Failed to fetch categories', error);
-            }
-        };
-
-        const fetchPlans = async () => {
-            const currentYear = new Date().getFullYear();
-            const response = await api.get(`/plans/?year=${currentYear}`);
-            setPlans(response.data);
-
-            if (response.data.length > 0) {
-                const selectedPlan = response.data.find(plan => plan.month === selectedMonth);
-                if (selectedPlan) {
-                    setSelectedPlanId(selectedPlan.id);
-                    // Fetch category limits for the selected plan
-                    const limitsResponse = await api.get(`/plans/${selectedPlan.id}/category_limits`);
-                    const limits = limitsResponse.data.reduce((acc, limit) => {
-                        acc[limit.category_id] = limit.limit;
-                        return acc;
-                    }, {});
-                    setBudgetLimits(limits);
-                    console.log('Budget limits:', limits)
-                }
-            }
-        };
-
         const fetchExpenses = async () => {
             try {
                 const response = await api.get(`/transactions/expenses_summary/?month=${selectedMonth}`);
@@ -99,24 +99,42 @@ const Planning = () => {
     };
 
     const handleLimitSubmit = async () => {
-        if (!selectedPlanId) {
-            alert("Please select a plan before submitting the limit.");
-            return;
+        try {
+            // Get the most up-to-date plan ID for the current month
+            const currentYear = new Date().getFullYear();
+            const plansResponse = await api.get(`/plans/?year=${currentYear}`);
+            const currentPlans = plansResponse.data;
+            const currentPlan = currentPlans.find(plan => plan.month === selectedMonth);
+            
+            if (!currentPlan) {
+                alert('No plan exists for the selected month. Please create a plan first.');
+                return;
+            }
+            
+            // Use the plan ID from the current month
+            const planIdToUse = currentPlan.id;
+            
+            console.log(`Updating limit for plan ID ${planIdToUse} for month ${selectedMonth}`);
+
+            const updatedLimit = {
+                category_id: selectedCategoryId,
+                limit: parseFloat(limit)
+            };
+
+            await api.put(`/plans/${planIdToUse}/category_limits/`, updatedLimit);
+
+            setBudgetLimits((prevLimits) => ({
+                ...prevLimits,
+                [selectedCategoryId]: limit,
+            }));
+            
+            setSelectedPlanId(planIdToUse); // Update the selected plan ID
+
+            closeModal();
+        } catch (error) {
+            console.error('Error updating category limit:', error);
+            alert('Failed to update category limit. Please try again.');
         }
-
-        const updatedLimit = {
-            category_id: selectedCategoryId,
-            limit: parseFloat(limit)
-        };
-
-        await api.put(`/plans/${selectedPlanId}/category_limits/`, updatedLimit);
-
-        setBudgetLimits((prevLimits) => ({
-            ...prevLimits,
-            [selectedCategoryId]: limit,
-        }));
-
-        closeModal();
     };
 
     const createPlan = async () => {
@@ -129,17 +147,7 @@ const Planning = () => {
     const handleMonthChange = async (month: number) => {
         setSelectedMonth(month);
         await fetchCategories(month);
-    };
-
-    const fetchCategories = async (month?: number) => {
-        try {
-            const response = await api.get('/transactions/categories', {
-                params: { month: month || selectedMonth },
-            });
-            setCategories(response.data.categories);
-        } catch (error) {
-            console.error('Failed to fetch categories', error);
-        }
+        await fetchPlans();
     };
 
     const toggleView = () => {
@@ -153,24 +161,40 @@ const Planning = () => {
         }
 
         try {
-            const response = await api.post(`/plans/${selectedPlanId}/category_limits`, {
-                category_id: selectedCategory.id,
-                limit: parseFloat(limitValue),
-            });
+            // Get the most up-to-date plan ID for the current month
+            const currentYear = new Date().getFullYear();
+            const plansResponse = await api.get(`/plans/?year=${currentYear}`);
+            const currentPlans = plansResponse.data;
+            const currentPlan = currentPlans.find(plan => plan.month === selectedMonth);
+            
+            // If we have a plan, use its ID, otherwise use 0 which will trigger plan creation on backend
+            const planIdToUse = currentPlan ? currentPlan.id : 0;
+            
+            console.log(`Adding limit for month ${selectedMonth}, year ${currentYear}`);
+            
+            // Include month and year as query parameters to allow the backend to create a plan if needed
+            const response = await api.post(
+                `/plans/${planIdToUse}/category_limits?month=${selectedMonth}&year=${currentYear}`, 
+                {
+                    category_id: selectedCategory.id,
+                    limit: parseFloat(limitValue),
+                }
+            );
 
-            // Fetch updated category limits
-            const updatedLimits = await api.get(`/plans/${selectedPlanId}/category_limits`);
-            const formattedLimits = updatedLimits.data.reduce((acc: any, limit: any) => {
-                acc[limit.category_id] = limit.limit; 
-                return acc;
-            }, {});
-
-            setBudgetLimits(formattedLimits);
+            // Update UI with new limit
+            setBudgetLimits((prevLimits) => ({
+                ...prevLimits,
+                [selectedCategory.id]: parseFloat(limitValue),
+            }));
 
             // Reset modal state
             setSelectedCategory(null);
             setLimitValue('');
             setIsAddLimitModalOpen(false);
+            
+            // Refresh plans to get the newly created plan
+            await fetchPlans();
+            
         } catch (error) {
             console.error('Error adding category limit:', error);
             alert('Failed to add category limit. Please try again.');
@@ -179,13 +203,33 @@ const Planning = () => {
 
     const handleDeleteLimit = async (categoryId: string) => {
         try {
-            await api.delete(`/plans/${selectedPlanId}/categories/${categoryId}`);
+            // Get the most up-to-date plan ID for the current month
+            const currentYear = new Date().getFullYear();
+            const plansResponse = await api.get(`/plans/?year=${currentYear}`);
+            const currentPlans = plansResponse.data;
+            const currentPlan = currentPlans.find(plan => plan.month === selectedMonth);
+            
+            if (!currentPlan) {
+                alert('No plan exists for the selected month. Cannot delete limit.');
+                return;
+            }
+            
+            // Use the plan ID from the current month
+            const planIdToUse = currentPlan.id;
+            
+            console.log(`Deleting limit from plan ID ${planIdToUse} for month ${selectedMonth}`);
+            
+            await api.delete(`/plans/${planIdToUse}/categories/${categoryId}`);
+            
             // Refresh the category limits
             const updatedBudgetLimits = { ...budgetLimits };
             delete updatedBudgetLimits[categoryId];
             setBudgetLimits(updatedBudgetLimits);
+            
+            setSelectedPlanId(planIdToUse); // Update the selected plan ID
         } catch (error) {
             console.error('Failed to delete category limit', error);
+            alert('Failed to delete category limit. Please try again.');
         }
     };
 

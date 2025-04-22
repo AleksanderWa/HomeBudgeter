@@ -23,6 +23,7 @@ const Planning = () => {
     const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
     const [query, setQuery] = useState('');
     const [limitValue, setLimitValue] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     
     // Income states
     const [monthlyIncome, setMonthlyIncome] = useState(0);
@@ -35,9 +36,7 @@ const Planning = () => {
 
     const fetchCategories = async (month?: number) => {
         try {
-            const response = await api.get('/transactions/categories', {
-                params: { month: month || selectedMonth },
-            });
+            const response = await api.get('/transactions/categories');
             setCategories(response.data.categories);
         } catch (error) {
             console.error('Failed to fetch categories', error);
@@ -60,7 +59,7 @@ const Planning = () => {
                     return acc;
                 }, {});
                 setBudgetLimits(limits);
-                console.log('Budget limits for month', monthToFetch, 'using plan ID', selectedPlan.id);
+                console.log('Budget limits for month', monthToFetch, 'using plan ID', selectedPlan.id, 'limits:', limits);
                 
                 // Fetch income for this plan
                 try {
@@ -115,7 +114,7 @@ const Planning = () => {
         }
 
         initData();
-    }, [selectedMonth]); // Fetch data when selectedMonth changes
+    }, []); // Only run on component mount
 
     const openModal = (category) => {
         setSelectedCategoryId(category.id);
@@ -218,9 +217,26 @@ const Planning = () => {
     };
 
     const handleMonthChange = async (month: number) => {
+        setIsLoading(true);
         setSelectedMonth(month);
-        // Note: We don't need to call fetchCategories and fetchPlans here anymore
-        // They will be triggered by the useEffect when selectedMonth changes
+        await fetchPlans(month);
+        // Fetch expenses for the new month
+        try {
+            const response = await api.get(`/transactions/expenses_summary/?month=${month}`);
+            setExpensesData(response.data); 
+
+            const updatedSpentAmounts = response.data.reduce((acc, item) => {
+                acc[item.category_id] = item.expenses; 
+                return acc;
+            }, {});
+            setSpentAmounts(updatedSpentAmounts);
+        } catch (error) {
+            console.error('Failed to fetch expenses summary', error);
+        }
+        
+        // Fetch categories for the new month
+        await fetchCategories(month);
+        setIsLoading(false);
     };
 
     const toggleView = () => {
@@ -356,6 +372,7 @@ const Planning = () => {
                                         value={selectedMonth}
                                         onChange={(e) => handleMonthChange(parseInt(e.target.value))}
                                         className="mt-2 p-2 border rounded w-full md:w-64"
+                                        disabled={isLoading}
                                     >
                                         <option value="">--Select Month--</option>
                                         {Array.from({ length: 12 }, (_, i) => {
@@ -370,6 +387,7 @@ const Planning = () => {
                                         })}
                                     </select>
                                 </label>
+                                {isLoading && <p className="text-sm text-blue-500 mt-1">Loading data...</p>}
                             </div>
                             <div className="flex gap-2">
                                 <button className='bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md flex items-center' onClick={() => setIsAddLimitModalOpen(true)}>

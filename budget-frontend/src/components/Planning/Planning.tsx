@@ -392,7 +392,7 @@ const Planning = () => {
                             <div className="flex gap-2">
                                 <button className='bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md flex items-center' onClick={() => setIsAddLimitModalOpen(true)}>
                                     <PlusIcon className='w-5 h-5 mr-2' />
-                                    Add Limit
+                                    Category Plan
                                 </button>
                             </div>
                         </div>
@@ -454,20 +454,20 @@ const Planning = () => {
                                 const progress = limit > 0 ? (spentAmount / limit) * 100 : spentAmount;
                                 return (
                                     <div key={category.id} className="flex items-center justify-between mb-2 p-2 border rounded bg-gray-100 shadow-sm">
-                                        <span className="flex-1 text-left text-gray-700 font-medium">{category.name}</span>
+                                        <span className="flex-1 text-left text-gray-700 font-medium truncate mr-2">{category.name}</span>
                                         <div className="relative w-full mx-2">
                                             <div className="bg-gray-300 h-2 rounded">
                                                 <div className="bg-blue-500 h-2 rounded" style={{ width: `${Math.min(progress, 100)}%` }}></div>
                                             </div>
                                         </div>
-                                        <p className='text-sm text-gray-600'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
+                                        <p className='text-sm text-gray-600 whitespace-nowrap ml-1'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
                                         <button
                                             onClick={(event) => {
                                                 event.stopPropagation();
                                                 setCategoryToDelete(category.id);
                                                 setIsDeleteConfirmationModalOpen(true);
                                             }}
-                                            className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center'
+                                            className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center ml-2'
                                         >
                                             <SolidTrashIcon className='w-4 h-4 mr-1' />
                                             Delete
@@ -497,7 +497,7 @@ const Planning = () => {
 
                                 return (
                                     <div key={category.id} className={`relative group p-6 bg-white rounded-xl shadow-md hover:shadow-md transition-shadow cursor-pointer ${progressColor}`} onClick={() => openModal(category)}>
-                                        <h3 className="text-lg font-medium mb-4 text-center">{category.name}</h3>
+                                        <h3 className="text-lg font-medium mb-4 text-center break-words hyphens-auto">{category.name}</h3>
                                         <div className="relative w-32 h-32 mx-auto mb-4">
                                             <svg className="w-full h-full" viewBox="0 0 100 100">
                                                 <circle className="text-gray-200" strokeWidth="8" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
@@ -508,7 +508,7 @@ const Planning = () => {
                                             </div>
                                         </div>
                                         <div className="text-center">
-                                            <p className='text-sm text-gray-600'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
+                                            <p className='text-sm text-gray-600 break-words'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
                                             <span className="text-xs text-gray-500">of limit</span>
                                         </div>
                                         <button

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="400" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Logo Container -->
+  <g transform="translate(20, 30)">
+    <!-- Green Clipboard Background -->
+    <path d="M75 0C58.4315 0 45 13.4315 45 30V45H30C13.4315 45 0 58.4315 0 75V300C0 316.569 13.4315 330 30 330H210C226.569 330 240 316.569 240 300V75C240 58.4315 226.569 45 210 45H195V30C195 13.4315 181.569 0 165 0H75Z" fill="#20A05D"/>
+    
+    <!-- Clipboard Top -->
+    <path d="M75 0C58.4315 0 45 13.4315 45 30V45H195V30C195 13.4315 181.569 0 165 0H75Z" fill="#20A05D"/>
+    <path d="M120 0H75C58.4315 0 45 13.4315 45 30V45H75V30C75 13.4315 88.4315 0 105 0H120Z" fill="#178C4F"/>
+    <path d="M120 0H165C181.569 0 195 13.4315 195 30V45H165V30C165 13.4315 151.569 0 135 0H120Z" fill="#178C4F"/>
+    
+    <!-- Checkmark -->
+    <path d="M80 160L120 200L200 120" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Bar Chart -->
+    <rect x="80" y="240" width="30" height="40" rx="5" fill="white"/>
+    <rect x="130" y="210" width="30" height="70" rx="5" fill="white"/>
+    <rect x="180" y="180" width="30" height="100" rx="5" fill="white"/>
+  </g>
+  
+  <!-- Text: Budget Tracker -->
+  <g transform="translate(320, 200)">
+    <text font-family="Arial, sans-serif" font-size="140" font-weight="bold" fill="#111111">
+      <tspan x="0" y="0">Budget</tspan>
+      <tspan x="0" y="140">Tracker</tspan>
+    </text>
+  </g>
+</svg> 

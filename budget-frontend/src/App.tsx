@@ -13,6 +13,7 @@ import ExpenseList from './components/Dashboard/ExpenseList.tsx'
 import Upload from './components/Upload/Upload.tsx'
 import Planning from './components/Planning/Planning.tsx' // Added import statement
 import Category from './components/Category/Category.tsx' // Added import statement
+import CategoryAssignment from './components/MainCategory/CategoryAssignment.tsx' // Added import statement
 import axios from 'axios'
 import CategoryPage from './components/Category/Category.tsx'
 import UploadPage from './components/Upload/Upload.tsx'
@@ -63,6 +64,7 @@ const AppContent: React.FC = () => {
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/planning" element={<PlanningPage />} />
             <Route path="/category" element={<CategoryPage />} />
+            <Route path="/category-assignment" element={<CategoryAssignment />} />
             <Route path="/banking" element={<Banking />} />
             <Route path="/bank-callback" element={<BankCallback />} />
           </Route>

@@ -3,10 +3,10 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon, PlusIcon, ChartPieIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, TrashIcon, ExclamationTriangleIcon, CheckIcon, PencilIcon, PlusIcon, ChartPieIcon, XMarkIcon, FunnelIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 import useExpenses from '../../hooks/useExpenses.ts';
 import api from '../../client/api/client.ts';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 
 interface ExpenseListProps {
   expenses?: any[];
@@ -34,6 +34,13 @@ const formatDateForAPI = (date: Date | null): string | undefined => {
   return date.toISOString().split('T')[0];
 };
 
+// Add interface for main category
+interface MainCategory {
+  id: number;
+  name: string;
+  categories?: any[];
+}
+
 export default function ExpenseList({ 
   expenses: propExpenses, 
   hideFilters = false 
@@ -47,6 +54,14 @@ export default function ExpenseList({
   const [localExpenses, setLocalExpenses] = useState<any[]>([]);
   const expenses = propExpenses === undefined ? hookExpenses : propExpenses;
   const [excludeIncome, setExcludeIncome] = useState(false);
+  const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
+  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
+  
+  // Add state for main categories
+  const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
+  const [selectedMainCategory, setSelectedMainCategory] = useState<number | null>(null);
+  const [showMainCategoryFilters, setShowMainCategoryFilters] = useState(false);
+  const [mainCategoryMap, setMainCategoryMap] = useState<Record<string, number[]>>({});
 
   React.useEffect(() => {
     setLocalExpenses(expenses);
@@ -93,6 +108,62 @@ export default function ExpenseList({
     fetchCategories();
   }, []);
 
+  // Fetch main categories and their category mappings
+  useEffect(() => {
+    const fetchMainCategories = async () => {
+      try {
+        // Get authentication token from local storage
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // Fetch main categories
+        const mainCatResponse = await api.get('/transactions/main-categories', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (mainCatResponse.data.main_categories) {
+          setMainCategories(mainCatResponse.data.main_categories);
+          
+          // Fetch categories for each main category
+          const mainCatDetailsPromises = mainCatResponse.data.main_categories.map((mc: MainCategory) => 
+            api.get(`/transactions/main-categories/${mc.id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            })
+          );
+          
+          const mainCatDetailsResponses = await Promise.all(mainCatDetailsPromises);
+          
+          // Create a mapping of category names to their main category IDs
+          const mapping: Record<string, number[]> = {};
+          
+          mainCatDetailsResponses.forEach((response, index) => {
+            const mainCategoryId = mainCatResponse.data.main_categories[index].id;
+            
+            if (response.data.categories) {
+              response.data.categories.forEach((category: any) => {
+                const categoryName = category.name;
+                
+                if (!mapping[categoryName]) {
+                  mapping[categoryName] = [];
+                }
+                
+                if (!mapping[categoryName].includes(mainCategoryId)) {
+                  mapping[categoryName].push(mainCategoryId);
+                }
+              });
+            }
+          });
+          
+          setMainCategoryMap(mapping);
+        }
+      } catch (error) {
+        console.error('Failed to fetch main categories', error);
+      }
+    };
+    
+    fetchMainCategories();
+  }, []);
+
   // Fetch expenses when dates or category changes
   useEffect(() => {
     // Only fetch if not hiding filters (meaning this component controls fetching)
@@ -115,17 +186,31 @@ export default function ExpenseList({
   const filteredExpenses = useMemo(() => {
     if (loading || error || !localExpenses) return []; // Add check for localExpenses
 
-    // Only apply search term filtering client-side
+    // Apply client-side filtering
     return localExpenses.filter(expense => {
+      // Apply search term filter
       const matchesSearch = !searchTerm || expense.description.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
+      
+      // Apply category exclusion filter (if chart filters are active)
+      const categoryName = expense.category?.name || 'Uncategorized';
+      const isCategoryIncluded = !excludedCategories.includes(categoryName);
+      
+      // Apply main category filter (if one is selected)
+      let matchesMainCategory = true;
+      if (selectedMainCategory !== null) {
+        // Check if the expense's category belongs to the selected main category
+        matchesMainCategory = mainCategoryMap[categoryName]?.includes(selectedMainCategory) || false;
+      }
+      
+      return matchesSearch && isCategoryIncluded && matchesMainCategory;
     });
-  }, [localExpenses, searchTerm, loading, error]);
+  }, [localExpenses, searchTerm, loading, error, excludedCategories, selectedMainCategory, mainCategoryMap]);
 
   // Process data for chart
   const chartData = useMemo(() => {
     if (!filteredExpenses || filteredExpenses.length === 0) return {};
     
+    // Calculate sums for all categories
     return filteredExpenses.reduce((acc, expense) => {
       const categoryName = expense.category?.name || 'Uncategorized';
       if (!acc[categoryName]) {
@@ -136,16 +221,99 @@ export default function ExpenseList({
     }, {} as Record<string, number>);
   }, [filteredExpenses]);
 
-  const chartDataArray = useMemo(() => 
-    Object.entries(chartData)
+  const chartDataArray = useMemo(() => {
+    // Convert chart data to array format
+    let data = Object.entries(chartData)
       .map(([category, amount]) => ({ 
         category, 
-        amount,
+        originalAmount: Number(amount),
         // Add absolute amount for display purposes
-        absAmount: Math.abs(amount)
-      }))
-      .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
-  , [chartData]);
+        amount: Math.abs(Number(amount))
+      }));
+    
+    // Filter by selected main category if one is selected
+    if (selectedMainCategory !== null) {
+      data = data.filter(item => {
+        // Include the category if it belongs to the selected main category
+        return mainCategoryMap[item.category]?.includes(selectedMainCategory) || false;
+      });
+    }
+    
+    // Final sorting (showing largest absolute values first)
+    const sortedData = data.sort((a, b) => Math.abs(b.originalAmount) - Math.abs(a.originalAmount));
+    
+    // Apply excluded categories filter only for display, keeping them in the data
+    // This ensures they still appear in the toggle list
+    const filteredData = sortedData.filter(item => !excludedCategories.includes(item.category));
+    
+    return filteredData;
+  }, [chartData, selectedMainCategory, mainCategoryMap, excludedCategories]);
+
+  // Get unique categories for the filter UI - completely independent from chart data
+  const uniqueCategories = useMemo(() => {
+    // Get all categories from all expenses
+    // This ensures all categories appear in the toggle list regardless of filtering
+    const categoriesSet = new Set<string>();
+    
+    // Use the original expenses (not filtered) to ensure all categories are included
+    if (localExpenses && localExpenses.length > 0) {
+      localExpenses.forEach(expense => {
+        const categoryName = expense.category?.name || 'Uncategorized';
+        categoriesSet.add(categoryName);
+      });
+    }
+    
+    // If we have a selected main category, we could optionally filter the list
+    // but we're deliberately NOT doing that to ensure all categories remain togglable
+    
+    return Array.from(categoriesSet).sort();
+  }, [localExpenses]);  // We don't add selectedMainCategory to avoid filtering the toggle list
+
+  // Helper function to toggle a category in the excluded list
+  const toggleCategory = (category: string) => {
+    setExcludedCategories(prev => 
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  // Calculate colors for categories (to maintain consistency)
+  const categoryColors = useMemo(() => {
+    const colors = [
+      '#4F46E5', // Indigo (primary)
+      '#2563EB', // Blue
+      '#7C3AED', // Purple
+      '#EC4899', // Pink
+      '#F97316', // Orange
+      '#EAB308', // Yellow
+      '#10B981', // Emerald
+      '#06B6D4', // Cyan
+      '#8B5CF6', // Violet
+      '#6366F1', // Indigo
+      '#3B82F6', // Blue
+      '#A855F7', // Purple
+    ];
+    
+    return uniqueCategories.reduce((acc, category, index) => {
+      acc[category] = colors[index % colors.length];
+      return acc;
+    }, {} as Record<string, string>);
+  }, [uniqueCategories]);
+
+  // Find main categories for a given category name
+  const getMainCategoriesForCategory = (categoryName: string): MainCategory[] => {
+    if (!categoryName || !mainCategoryMap[categoryName]) return [];
+    
+    const mainCategoryIds = mainCategoryMap[categoryName] || [];
+    return mainCategories.filter(mc => mainCategoryIds.includes(mc.id));
+  };
+
+  // Helper function to get main category name from ID
+  const getMainCategoryName = (id: number): string => {
+    const mainCategory = mainCategories.find(mc => mc.id === id);
+    return mainCategory ? mainCategory.name : '';
+  };
 
   const handleDeleteTransaction = async () => {
     if (!selectedTransactionId) return;
@@ -242,6 +410,38 @@ export default function ExpenseList({
     setEditedTransaction({ ...editedTransaction, amount: parseFloat(value) });
   };
 
+  // Mobile Card View - Category Styling
+  const categoryBadgeStyle = "inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full whitespace-nowrap max-w-fit";
+  const mainCategoryBadgeStyle = "inline-block px-2 py-1 bg-indigo-600 text-white text-xs rounded-full shadow-sm whitespace-nowrap max-w-fit";
+
+  // Calculate total sums for filtered expenses
+  const expenseSummary = useMemo(() => {
+    if (!filteredExpenses || filteredExpenses.length === 0) {
+      return { totalExpense: 0, totalIncome: 0, netBalance: 0 };
+    }
+    
+    return filteredExpenses.reduce((acc, expense) => {
+      const amount = expense.amount;
+      
+      if (amount < 0) {
+        // It's an expense (negative amount)
+        acc.totalExpense += Math.abs(amount);
+      } else {
+        // It's an income (positive amount)
+        acc.totalIncome += amount;
+      }
+      
+      acc.netBalance += amount;
+      return acc;
+    }, { totalExpense: 0, totalIncome: 0, netBalance: 0 });
+  }, [filteredExpenses]);
+
+  // Format main category display for tooltips
+  const formatMainCategoryTooltip = (mainCategories: MainCategory[]): string => {
+    if (mainCategories.length === 0) return '';
+    return 'Main Categories: ' + mainCategories.map(mc => mc.name).join(', ');
+  };
+
   if (loading && !hideFilters) { // Only show top-level loading if this component is fetching
     return <div>Loading expenses...</div>;
   }
@@ -251,7 +451,7 @@ export default function ExpenseList({
   }
 
   return (
-    <div className="bg-white p-2 sm:p-4 rounded-lg shadow-sm">
+    <div className="bg-white p-2 sm:p-4 rounded-lg shadow-sm mb-16 sm:mb-4">
       {/* Add Transaction Button */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Transactions</h2>
@@ -297,7 +497,7 @@ export default function ExpenseList({
                   selectsEnd
                   startDate={startDate}
                   endDate={endDate}
-                  minDate={startDate}
+                  minDate={startDate || undefined}
                   className="form-input w-full rounded-md text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
                   dateFormat="yyyy-MM-dd"
                 />
@@ -339,37 +539,191 @@ export default function ExpenseList({
         </div>
       )}
 
+      {/* Filtered Transactions Summary */}
+      {filteredExpenses.length > 0 && (
+        <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-base sm:text-lg font-semibold mb-3 flex items-center">
+            <CurrencyDollarIcon className="w-5 h-5 mr-2 text-green-600" />
+            Transaction Summary
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+              <p className="text-xs text-gray-500 mb-1">TOTAL EXPENSES</p>
+              <p className="text-lg font-bold text-red-600">
+                ${expenseSummary.totalExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+              <p className="text-xs text-gray-500 mb-1">TOTAL INCOME</p>
+              <p className="text-lg font-bold text-green-600">
+                ${expenseSummary.totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className={`p-3 rounded-lg border ${expenseSummary.netBalance >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
+              <p className="text-xs text-gray-500 mb-1">NET BALANCE</p>
+              <p className={`text-lg font-bold ${expenseSummary.netBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                ${expenseSummary.netBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-gray-500 text-right">
+            Showing summary for {filteredExpenses.length} transaction{filteredExpenses.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+      )}
+
       {/* Expense Distribution Chart */}
       {filteredExpenses.length > 0 && !hideFilters && (
         <div className="mb-6">
           <div className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold flex items-center">
-                <ChartPieIcon className="w-6 h-6 mr-2 text-purple-600" />
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center">
+                <ChartPieIcon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 text-purple-600" />
                 Expense Distribution
               </h3>
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={excludeIncome}
-                  onChange={() => setExcludeIncome(!excludeIncome)}
-                  className="form-checkbox h-4 w-4"
-                />
-                <span className="text-sm">Exclude Income</span>
-              </label>
-            </div>
-            <div className="h-64 sm:h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartDataArray.filter(d => excludeIncome ? d.amount < 0 : true)}>
-                  <XAxis dataKey="category" tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 12)}...` : value} />
-                  <YAxis tickFormatter={(value) => `$${Math.abs(value)}`} />
-                  <Tooltip 
-                    formatter={(value) => `$${Math.abs(Number(value)).toLocaleString()}`}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
+                <label className="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={excludeIncome}
+                    onChange={() => setExcludeIncome(!excludeIncome)}
+                    className="form-checkbox h-3 w-3 sm:h-4 sm:w-4"
                   />
-                  <Bar dataKey="absAmount" fill="#4F46E5" />
-                </BarChart>
-              </ResponsiveContainer>
+                  <span className="text-xs sm:text-sm ml-1">Exclude Income</span>
+                </label>
+                <button
+                  onClick={() => setShowCategoryFilters(!showCategoryFilters)}
+                  className="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                >
+                  {showCategoryFilters ? 'Hide Categories' : 'Filter Categories'}
+                </button>
+                {mainCategories.length > 0 && (
+                  <button
+                    onClick={() => setShowMainCategoryFilters(!showMainCategoryFilters)}
+                    className="flex items-center text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                  >
+                    <FunnelIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    {showMainCategoryFilters ? 'Hide Main' : 'Main Filters'}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Main Category Filter UI */}
+            {showMainCategoryFilters && mainCategories.length > 0 && (
+              <div className="mb-3">
+                <div className="p-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-xs font-semibold mb-2">Filter by Main Category</h4>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      onClick={() => setSelectedMainCategory(null)}
+                      className={`px-2 py-0.5 text-xs rounded-full flex items-center ${
+                        selectedMainCategory === null 
+                          ? 'bg-indigo-600 text-white' 
+                          : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {mainCategories.map(mainCategory => (
+                      <button
+                        key={mainCategory.id}
+                        onClick={() => setSelectedMainCategory(
+                          selectedMainCategory === mainCategory.id ? null : mainCategory.id
+                        )}
+                        className={`px-2 py-0.5 text-xs rounded-full flex items-center ${
+                          selectedMainCategory === mainCategory.id
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        <span className="truncate max-w-[80px]">{mainCategory.name}</span>
+                        {selectedMainCategory === mainCategory.id && (
+                          <XMarkIcon className="w-3 h-3 ml-1 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Category Filter UI */}
+            {showCategoryFilters && (
+              <div className="mb-3">
+                <div className="p-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-xs font-semibold mb-2">Toggle Categories</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {uniqueCategories.map(category => (
+                      <button
+                        key={category}
+                        onClick={() => toggleCategory(category)}
+                        className={`px-2 py-0.5 text-xs rounded-full flex items-center ${
+                          excludedCategories.includes(category)
+                            ? 'bg-gray-200 text-gray-500'
+                            : 'text-white'
+                        }`}
+                        style={{ 
+                          backgroundColor: excludedCategories.includes(category) 
+                            ? '#f3f4f6' 
+                            : categoryColors[category] || '#4F46E5'
+                        }}
+                      >
+                        <span className="truncate max-w-[80px]">{category}</span>
+                        {excludedCategories.includes(category) && (
+                          <XMarkIcon className="w-3 h-3 ml-1 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Display chart or no data message */}
+            {(chartDataArray.length > 0 || (uniqueCategories.length > 0 && excludedCategories.length > 0)) ? (
+              <div className="h-64 sm:h-80 mt-4 pb-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={chartDataArray.filter(d => excludeIncome ? d.amount < 0 : true)} 
+                    margin={{ top: 5, right: 10, bottom: 5, left: 0 }}
+                  >
+                    <XAxis 
+                      dataKey="category" 
+                      tickFormatter={(value) => value.length > 8 ? `${value.substring(0, 6)}...` : value}
+                      fontSize={10}
+                      tick={{ fill: '#6B7280' }}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `$${Math.abs(Number(value))}`}
+                      fontSize={10}
+                      tick={{ fill: '#6B7280' }}
+                      width={40}
+                    />
+                    <Tooltip 
+                      formatter={(value) => `$${Math.abs(Number(value)).toLocaleString()}`}
+                      contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px' }}
+                      labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                    />
+                    <Bar 
+                      dataKey="amount" 
+                      fill="#4F46E5"
+                    >
+                      {chartDataArray.map((entry) => (
+                        <Cell
+                          key={`cell-${entry.category}`}
+                          fill={categoryColors[entry.category] || "#4F46E5"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex justify-center items-center h-64 bg-gray-50 rounded-lg">
+                <p className="text-gray-500">No data to display with current filters</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -423,9 +777,30 @@ export default function ExpenseList({
                           {categories.map((category) => (<option key={category} value={category}>{category}</option>))}
                         </select>
                       ) : (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full whitespace-nowrap">
-                          {expense.category?.name || 'Uncategorized'}
-                        </span>
+                        <div>
+                          {/* Regular category */}
+                          <div className="flex items-start">
+                            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full whitespace-nowrap">
+                              {expense.category?.name || 'Uncategorized'}
+                            </span>
+                          </div>
+                          
+                          {/* Main categories */}
+                          {getMainCategoriesForCategory(expense.category?.name || '').length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {getMainCategoriesForCategory(expense.category?.name || '').map((mainCat) => (
+                                <div key={mainCat.id} className="inline-block">
+                                  <span 
+                                    className="inline-block px-2 py-1 bg-indigo-600 text-white text-xs rounded-full shadow-sm whitespace-nowrap"
+                                    title={mainCat.name}
+                                  >
+                                    {mainCat.name}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className={`p-2 text-right text-sm ${expense.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -530,37 +905,53 @@ export default function ExpenseList({
                         </p>
                       </div>
                     </div>
-                    {/* Category and Actions on the same line */}
-                    <div className="flex justify-between items-center mt-2">
-                      {/* Category with bubble-like appearance */}
-                      <span className={`inline-block px-3 py-1.5 text-xs rounded-full shadow-sm ${
-                        expense.category 
-                          ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200' 
-                          : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
-                      }`}>
-                        {expense.category?.name || 'Uncategorized'}
-                      </span>
-                      {/* Actions aligned right */}
-                      <div className="flex space-x-2">
-                        {/* Edit Button with Text */}
-                        <button 
-                          onClick={() => handleEdit(index)} 
-                          title="Edit" 
-                          className="flex items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                        >
-                          <PencilIcon className="w-4 h-4 mr-1" /> 
-                          Edit
-                        </button>
-                        {/* Delete Button with Text */}
-                        <button 
-                          onClick={() => { setSelectedTransactionId(expense.id); setDeleteModalOpen(true); }} 
-                          title="Delete" 
-                          className="flex items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-                        >
-                          <TrashIcon className="w-4 h-4 mr-1" /> 
-                          Delete
-                        </button>
+                    
+                    {/* Category and Main Categories */}
+                    <div className="mt-2 mb-3">
+                      {/* Regular category */}
+                      <div className="flex items-start">
+                        <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full whitespace-nowrap">
+                          {expense.category?.name || 'Uncategorized'}
+                        </span>
                       </div>
+                      
+                      {/* Main categories */}
+                      {getMainCategoriesForCategory(expense.category?.name || '').length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {getMainCategoriesForCategory(expense.category?.name || '').map((mainCat) => (
+                            <div key={mainCat.id} className="inline-block">
+                              <span 
+                                className="inline-block px-2 py-1 bg-indigo-600 text-white text-xs rounded-full shadow-sm whitespace-nowrap"
+                                title={mainCat.name}
+                              >
+                                {mainCat.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Actions - Fixed position at bottom */}
+                    <div className="flex space-x-2 justify-end">
+                      {/* Edit Button with Text */}
+                      <button 
+                        onClick={() => handleEdit(index)} 
+                        title="Edit" 
+                        className="flex items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                      >
+                        <PencilIcon className="w-4 h-4 mr-1" /> 
+                        Edit
+                      </button>
+                      {/* Delete Button with Text */}
+                      <button 
+                        onClick={() => { setSelectedTransactionId(expense.id); setDeleteModalOpen(true); }} 
+                        title="Delete" 
+                        className="flex items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                      >
+                        <TrashIcon className="w-4 h-4 mr-1" /> 
+                        Delete
+                      </button>
                     </div>
                   </>
                 )}

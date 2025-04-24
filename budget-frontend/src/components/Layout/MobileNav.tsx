@@ -24,9 +24,9 @@ export default function MobileNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-inner sm:hidden z-40">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg sm:hidden z-50">
       {/* Navigation grid */}
-      <div className="grid grid-cols-5 items-center h-16">
+      <div className="grid grid-cols-5 items-center h-14">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
@@ -35,11 +35,11 @@ export default function MobileNav() {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center justify-center py-1 transition-colors duration-150 ${active ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+              className={`flex flex-col items-center justify-center py-1 px-1 transition-colors duration-150 ${active ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
               aria-label={item.label}
             >
               <Icon className="w-5 h-5 mb-0.5" />
-              <span className={`text-xs font-medium truncate max-w-[90%] text-center ${active ? 'text-indigo-600' : 'text-gray-700'}`}>{item.label}</span>
+              <span className={`text-xs font-medium truncate max-w-[95%] text-center ${active ? 'text-indigo-600' : 'text-gray-700'}`}>{item.label}</span>
             </Link>
           );
         })}

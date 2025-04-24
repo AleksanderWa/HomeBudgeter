@@ -22,7 +22,8 @@ from backend.app.schemas.schemas import (
     TransactionSummaryResponse,
     TransactionEdit,
     DashboardResponse,
-    CategoryEdit
+    CategoryEdit,
+    MainCategoryResponse
 )
 from backend.app.utils.auth import get_current_user
 from backend.app.services.categorization_service import CategorizationService
@@ -197,6 +198,7 @@ async def update_category(
     db_category.name = category_edit.name
     db.commit()
     db.refresh(db_category)
+    db_category.main_categories = []
     return db_category
 
 
@@ -663,3 +665,35 @@ async def delete_category(
    
     db.delete(db_category)
     db.commit()
+
+
+@router.get('/categories/{category_id}/main-categories', response_model=dict)
+def get_main_categories_by_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get all main categories associated with a specific category.
+    """
+    category = (
+        db.query(Category)
+        .filter(
+            Category.id == category_id,
+            Category.user_id == current_user.id
+        )
+        .first()
+    )
+    
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    main_categories = [
+        MainCategoryResponse(
+            id=mc.id,
+            name=mc.name,
+            user_id=mc.user_id
+        ) for mc in category.main_categories
+    ]
+    
+    return {"main_categories": main_categories}

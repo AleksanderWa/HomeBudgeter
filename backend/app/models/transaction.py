@@ -1,5 +1,5 @@
 from ..database.database import Base
-from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index, Table
 from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -17,6 +17,15 @@ class BankConnection(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# Association table for many-to-many relationship between Category and MainCategory
+category_main_category = Table(
+    "category_main_category",
+    Base.metadata,
+    Column("category_id", Integer, ForeignKey("categories.id"), primary_key=True),
+    Column("main_category_id", Integer, ForeignKey("main_categories.id"), primary_key=True)
+)
 
 
 class Transaction(Base):
@@ -43,6 +52,22 @@ class Transaction(Base):
     category = relationship("Category", back_populates="transactions")
 
 
+class MainCategory(Base):
+    __tablename__ = "main_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Relationships
+    user = relationship("User")
+    categories = relationship("Category", secondary=category_main_category, back_populates="main_categories")
+
+    __table_args__ = (
+        UniqueConstraint('name', 'user_id', name='_main_category_name_user_uc'),
+    )
+
+
 class Category(Base):
     __tablename__ = "categories"
 
@@ -52,6 +77,7 @@ class Category(Base):
 
     # Relationships
     user = relationship("User")
+    main_categories = relationship("MainCategory", secondary=category_main_category, back_populates="categories")
     category_limits = relationship('CategoryLimit', back_populates='category')
     transactions = relationship("Transaction", back_populates="category")
     categorization_rules = relationship("CategorizationRule", back_populates="category")

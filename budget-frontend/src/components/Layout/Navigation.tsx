@@ -159,7 +159,31 @@ export default function Navigation() {
           <div className="flex justify-between h-16">
             <div className="flex">
               <Link to="/" className="flex items-center">
-                <span className="text-xl font-bold">Budget Tracker</span>
+                <div className="flex items-center">
+                  <svg 
+                    width="36" 
+                    height="36" 
+                    viewBox="0 0 240 240" 
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="mr-2"
+                  >
+                    {/* Green Clipboard Background */}
+                    <path d="M75 0C58.4315 0 45 13.4315 45 30V45H30C13.4315 45 0 58.4315 0 75V210C0 226.569 13.4315 240 30 240H210C226.569 240 240 226.569 240 210V75C240 58.4315 226.569 45 210 45H195V30C195 13.4315 181.569 0 165 0H75Z" fill="#20A05D"/>
+                    
+                    {/* Clipboard Top */}
+                    <path d="M120 0H75C58.4315 0 45 13.4315 45 30V45H75V30C75 13.4315 88.4315 0 105 0H120Z" fill="#178C4F"/>
+                    <path d="M120 0H165C181.569 0 195 13.4315 195 30V45H165V30C165 13.4315 151.569 0 135 0H120Z" fill="#178C4F"/>
+                    
+                    {/* Checkmark */}
+                    <path d="M80 120L120 160L200 80" stroke="white" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round"/>
+                    
+                    {/* Bar Chart */}
+                    <rect x="80" y="180" width="20" height="30" rx="4" fill="white"/>
+                    <rect x="120" y="160" width="20" height="50" rx="4" fill="white"/>
+                    <rect x="160" y="140" width="20" height="70" rx="4" fill="white"/>
+                  </svg>
+                  <span className="text-xl font-bold">Budget Tracker</span>
+                </div>
               </Link>
             </div>
             <div className="hidden sm:flex sm:items-center sm:space-x-4">
@@ -192,7 +216,7 @@ export default function Navigation() {
                 className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-md flex items-center"
               >
                 <PlusIcon className="w-5 h-5 mr-1" />
-                Add Transaction
+                Transaction
               </button>
             </div>
           </div>

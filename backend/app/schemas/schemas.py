@@ -197,6 +197,10 @@ class CategoryResponse(BaseModel):
     id: int
     name: str
     user_id: int
+    main_categories: List[int] = []
+    
+    class Config:
+        orm_mode = True
 
 
 # Pagination schema
@@ -309,3 +313,30 @@ class PlanIncomeResponse(BaseModel):
     
     class Config:
         orm_mode = True
+
+
+# Main Category Schemas
+class MainCategoryCreate(BaseModel):
+    name: str
+    
+    @validator("name")
+    def validate_main_category_name(cls, v):
+        cleaned_name = v.strip()
+        if not cleaned_name:
+            raise ValueError("Main category name cannot be empty")
+        if len(cleaned_name) > 50:
+            raise ValueError("Main category name must be 50 characters or less")
+        return cleaned_name
+
+
+class MainCategoryResponse(BaseModel):
+    id: int
+    name: str
+    user_id: int
+    
+    class Config:
+        orm_mode = True
+
+
+class MainCategoryDetailResponse(MainCategoryResponse):
+    categories: List[CategoryResponse]

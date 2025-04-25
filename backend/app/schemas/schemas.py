@@ -340,3 +340,34 @@ class MainCategoryResponse(BaseModel):
 
 class MainCategoryDetailResponse(MainCategoryResponse):
     categories: List[CategoryResponse]
+
+
+# Transaction filter rule schemas
+class TransactionFilterRuleBase(BaseModel):
+    description_pattern: Optional[str] = None
+    merchant_name: Optional[str] = None
+    min_amount: Optional[Decimal] = None
+    max_amount: Optional[Decimal] = None
+    is_active: bool = True
+
+
+class TransactionFilterRuleCreate(TransactionFilterRuleBase):
+    pass
+
+
+class TransactionFilterRuleUpdate(TransactionFilterRuleBase):
+    description_pattern: Optional[str] = None
+    merchant_name: Optional[str] = None
+    min_amount: Optional[Decimal] = None
+    max_amount: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+
+
+class TransactionFilterRuleResponse(TransactionFilterRuleBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True

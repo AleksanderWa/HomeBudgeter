@@ -5,7 +5,13 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional, List
 
 from backend.app.database.database import get_db
-from backend.app.models.transaction import Transaction, Category, Plan, CategoryLimit
+from backend.app.models.transaction import (
+    Transaction,
+    Category,
+    Plan,
+    CategoryLimit,
+    MainCategory,
+)
 from backend.app.models.user import User
 from backend.app.schemas.schemas import (
     CategoryResponse,
@@ -23,7 +29,7 @@ from backend.app.schemas.schemas import (
     TransactionEdit,
     DashboardResponse,
     CategoryEdit,
-    MainCategoryResponse
+    MainCategoryResponse,
 )
 from backend.app.utils.auth import get_current_user
 from backend.app.services.categorization_service import CategorizationService
@@ -166,7 +172,6 @@ def get_transaction_categories(
     categories = (
         db.query(Category)
         .filter(Category.user_id == current_user.id)
-        .distinct()
         .order_by(Category.name)
         .all()
     )
@@ -179,7 +184,8 @@ def get_transaction_categories(
             CategoryResponse(
                 id=category.id,
                 name=category.name,
-                user_id=category.user_id
+                user_id=category.user_id,
+                main_categories=[mc.id for mc in category.main_categories]
             ) for category in categories
         ]}
 
@@ -191,10 +197,14 @@ async def update_category(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    db_category = db.query(Category).filter(Category.id == category_id, Category.user_id == current_user.id).first()
+    db_category = (
+        db.query(Category)
+        .filter(Category.id == category_id, Category.user_id == current_user.id)
+        .first()
+    )
     if not db_category:
         raise HTTPException(status_code=404, detail="Category not found")
-    
+
     db_category.name = category_edit.name
     db.commit()
     db.refresh(db_category)

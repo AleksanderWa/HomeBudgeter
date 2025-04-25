@@ -1,5 +1,5 @@
 from ..database.database import Base
-from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index, Table
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index, Table, CheckConstraint, Boolean
 from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -134,4 +134,36 @@ class PlanIncome(Base):
 
     __table_args__ = (
         UniqueConstraint('plan_id', 'user_id', name='_plan_user_income_uc'),
+    )
+
+
+class TransactionFilterRule(Base):
+    __tablename__ = "transaction_filter_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Filter criteria - at least one must be provided
+    description_pattern = Column(String, nullable=True)  # Text pattern in transaction description
+    merchant_name = Column(String, nullable=True)        # Merchant name to filter
+    min_amount = Column(DECIMAL(precision=10, scale=2), nullable=True)  # Min amount to filter
+    max_amount = Column(DECIMAL(precision=10, scale=2), nullable=True)  # Max amount to filter
+    
+    is_active = Column(Boolean, default=True)  # Allow disabling rules without deletion
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+
+    __table_args__ = (
+        # Ensure at least one filter criterion is provided
+        CheckConstraint(
+            "description_pattern IS NOT NULL OR merchant_name IS NOT NULL OR min_amount IS NOT NULL OR max_amount IS NOT NULL",
+            name="check_at_least_one_filter_criterion"
+        ),
+        # Create unique indexes for efficient lookups
+        UniqueConstraint('user_id', 'description_pattern', name='_user_desc_filter_uc'),
+        UniqueConstraint('user_id', 'merchant_name', name='_user_merchant_filter_uc'),
+        Index('ix_filter_rules_user_id', 'user_id'),
     )

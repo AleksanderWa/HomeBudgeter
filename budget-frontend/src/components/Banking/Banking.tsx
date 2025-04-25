@@ -1,5 +1,6 @@
 import React from 'react';
 import BankConnections from './BankConnections.tsx';
+import FilterRules from './FilterRules.tsx';
 
 const Banking: React.FC = () => {
   return (
@@ -13,6 +14,7 @@ const Banking: React.FC = () => {
             </p>
           </div>
           <BankConnections />
+          <FilterRules />
         </div>
       </div>
     </div>

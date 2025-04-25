@@ -95,6 +95,31 @@ The system works as follows:
 - Future transactions with the same description or merchant name will be automatically assigned the same category.
 - This reduces the need for repetitive manual categorization of recurring transactions.
 
+## Transaction Filtering Rules
+
+The integration supports custom filtering rules that allow users to automatically skip certain transactions during import:
+
+1. **Description-based Filtering**: Exclude transactions containing specific words or phrases in their descriptions.
+2. **Merchant-based Filtering**: Skip transactions from specific merchants.
+3. **Amount-based Filtering**: Filter transactions based on their monetary value.
+
+### Benefits of Filtering Rules
+
+- **Reduce Clutter**: Exclude irrelevant or personal transactions that don't need budget tracking.
+- **Focus on Important Data**: Only import transactions that matter for your budgeting purposes.
+- **Customizable Experience**: Each user can set their own filtering preferences.
+
+### Managing Rules
+
+Rules can be managed through the `/banking` page in the application interface, where users can:
+
+- Create new filtering rules
+- Edit existing rules
+- Delete rules they no longer need
+- View which transactions have been filtered
+
+When new transactions are fetched (either during initial bank connection or when refreshing transactions), these rules are automatically applied before importing the data into your system.
+
 ## Optimized Transaction Fetching
 
 The integration intelligently fetches only new transactions:

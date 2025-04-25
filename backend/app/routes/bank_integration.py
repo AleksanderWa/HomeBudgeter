@@ -11,6 +11,12 @@ from backend.app.models.transaction import BankConnection, Transaction
 from backend.app.routes.auth import get_current_user
 from backend.app.services.truelayer_service import TrueLayerService
 from backend.app.services.categorization_service import CategorizationService
+from backend.app.services.filter_service import TransactionFilterService
+from backend.app.schemas.schemas import (
+    TransactionFilterRuleCreate, 
+    TransactionFilterRuleUpdate, 
+    TransactionFilterRuleResponse
+)
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -45,6 +51,8 @@ async def truelayer_callback(
 ):
     """Handle callback from TrueLayer after user authorizes access"""
     categorization_service = CategorizationService(db)
+    filter_service = TransactionFilterService(db)
+    
     try:
         # Decode user_id from state
         try:
@@ -114,6 +122,7 @@ async def truelayer_callback(
 
         # Import transactions for all accounts
         transactions_imported = 0
+        transactions_filtered = 0
         for account_data in accounts:
             # Fetch transactions with optional from_date
             transactions = truelayer_service.get_account_transactions(
@@ -140,7 +149,12 @@ async def truelayer_callback(
 
                     # Skip income transactions (amount >= 0)
                     if tx_formatted["amount"] >= 0:
-                        continue # Skip this transaction
+                        continue  # Skip this transaction
+                    
+                    # Apply filter rules to see if we should skip this transaction
+                    if filter_service.should_skip_transaction(user.id, tx_formatted):
+                        transactions_filtered += 1
+                        continue  # Skip filtered transaction
 
                     transaction = Transaction(**tx_formatted)
                     
@@ -155,6 +169,7 @@ async def truelayer_callback(
         return {
             "message": "Bank account connected successfully",
             "transactions_imported": transactions_imported,
+            "transactions_filtered": transactions_filtered,
         }
 
     except Exception as e:
@@ -195,6 +210,7 @@ async def refresh_transactions(
         raise HTTPException(status_code=404, detail="Connection not found")
 
     categorization_service = CategorizationService(db)
+    filter_service = TransactionFilterService(db)
 
     # Get the most recent transaction for this connection to use as start date
     most_recent_transaction = (
@@ -240,6 +256,7 @@ async def refresh_transactions(
 
         # Import transactions for all accounts
         transactions_imported = 0
+        transactions_filtered = 0
         for account_data in accounts:
             # Fetch transactions with optional from_date
             transactions = truelayer_service.get_account_transactions(
@@ -266,7 +283,12 @@ async def refresh_transactions(
 
                     # Skip income transactions (amount >= 0)
                     if tx_formatted["amount"] >= 0:
-                        continue # Skip this transaction
+                        continue  # Skip this transaction
+                    
+                    # Apply filter rules to see if we should skip this transaction
+                    if filter_service.should_skip_transaction(current_user.id, tx_formatted):
+                        transactions_filtered += 1
+                        continue  # Skip filtered transaction
 
                     transaction = Transaction(**tx_formatted)
                     
@@ -281,10 +303,97 @@ async def refresh_transactions(
         return {
             "message": "Transactions refreshed successfully",
             "transactions_imported": transactions_imported,
+            "transactions_filtered": transactions_filtered,
         }
 
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Error refreshing transactions: {str(e)}"
+        )
+
+# After the last endpoint, add the filter rule endpoints
+@router.get("/filter-rules", response_model=List[TransactionFilterRuleResponse])
+async def get_filter_rules(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all transaction filter rules for the current user"""
+    filter_service = TransactionFilterService(db)
+    rules = filter_service.get_filter_rules(current_user.id)
+    return rules
+
+
+@router.post("/filter-rules", response_model=TransactionFilterRuleResponse)
+async def create_filter_rule(
+    rule_data: TransactionFilterRuleCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new transaction filter rule"""
+    filter_service = TransactionFilterService(db)
+    
+    try:
+        rule = filter_service.create_filter_rule(
+            user_id=current_user.id,
+            description_pattern=rule_data.description_pattern,
+            merchant_name=rule_data.merchant_name,
+            min_amount=rule_data.min_amount,
+            max_amount=rule_data.max_amount
+        )
+        return rule
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/filter-rules/{rule_id}", response_model=TransactionFilterRuleResponse)
+async def update_filter_rule(
+    rule_id: int,
+    rule_data: TransactionFilterRuleUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an existing transaction filter rule"""
+    filter_service = TransactionFilterService(db)
+    
+    try:
+        updated_rule = filter_service.update_filter_rule(
+            rule_id=rule_id,
+            user_id=current_user.id,
+            description_pattern=rule_data.description_pattern,
+            merchant_name=rule_data.merchant_name,
+            min_amount=rule_data.min_amount,
+            max_amount=rule_data.max_amount,
+            is_active=rule_data.is_active
+        )
+        
+        if not updated_rule:
+            raise HTTPException(
+                status_code=404,
+                detail="Filter rule not found or you don't have permission to update it"
+            )
+            
+        return updated_rule
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/filter-rules/{rule_id}", status_code=204)
+async def delete_filter_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a transaction filter rule"""
+    filter_service = TransactionFilterService(db)
+    
+    success = filter_service.delete_filter_rule(
+        rule_id=rule_id,
+        user_id=current_user.id
+    )
+    
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Filter rule not found or you don't have permission to delete it"
         )

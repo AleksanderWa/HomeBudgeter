@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import api from '../../client/api/client.ts';
 import { generateAndStoreState } from '../../utils/redirector.ts';
+import { 
+  getBankConnections, 
+  getAuthLink, 
+  refreshTransactions 
+} from '../../client/api/bankingService.ts';
 
 interface BankConnection {
   id: number;
@@ -8,12 +12,18 @@ interface BankConnection {
   created_at: string;
 }
 
+interface RefreshResult {
+  message: string;
+  transactions_imported: number;
+  transactions_filtered: number;
+}
+
 const BankConnections: React.FC = () => {
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
-  const [refreshResult, setRefreshResult] = useState<{message: string, count: number} | null>(null);
+  const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null);
 
   useEffect(() => {
     fetchConnections();
@@ -22,8 +32,8 @@ const BankConnections: React.FC = () => {
   const fetchConnections = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/bank/connections');
-      setConnections(response.data);
+      const response = await getBankConnections();
+      setConnections(response);
       setError(null);
     } catch (err) {
       setError('Failed to fetch bank connections');
@@ -39,24 +49,24 @@ const BankConnections: React.FC = () => {
       const state = generateAndStoreState();
       
       // Get auth link from backend with state
-      const response = await api.get(`/bank/auth-link?state=${state}`);
-      console.log(response.data);
+      const response = await getAuthLink(state);
       // Redirect to bank authorization page
-      window.location.href = response.data.auth_link;
+      window.location.href = response.auth_link;
     } catch (err) {
       setError('Failed to generate bank connection link');
       console.error('Error generating bank connection link:', err);
     }
   };
 
-  const refreshTransactions = async (connectionId: number) => {
+  const refreshBankTransactions = async (connectionId: number) => {
     try {
       setRefreshingId(connectionId);
       setRefreshResult(null);
-      const response = await api.post(`/bank/refresh/${connectionId}`);
+      const response = await refreshTransactions(connectionId);
       setRefreshResult({
-        message: response.data.message,
-        count: response.data.transactions_imported
+        message: response.message,
+        transactions_imported: response.transactions_imported,
+        transactions_filtered: response.transactions_filtered
       });
       await fetchConnections(); // Refresh the list
     } catch (err) {
@@ -73,9 +83,9 @@ const BankConnections: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="bg-white shadow rounded-lg p-6 mb-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Bank Connections</h1>
+        <h2 className="text-xl font-semibold">Bank Connections</h2>
         <button
           onClick={connectBank}
           className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
@@ -92,7 +102,11 @@ const BankConnections: React.FC = () => {
 
       {refreshResult && (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          {refreshResult.message}: {refreshResult.count} new transactions imported
+          <p>{refreshResult.message}</p>
+          <p className="text-sm mt-1">
+            {refreshResult.transactions_imported} new transactions imported, 
+            {refreshResult.transactions_filtered} transactions filtered out
+          </p>
         </div>
       )}
 
@@ -123,7 +137,7 @@ const BankConnections: React.FC = () => {
               </div>
               <div className="mt-4">
                 <button
-                  onClick={() => refreshTransactions(connection.id)}
+                  onClick={() => refreshBankTransactions(connection.id)}
                   disabled={refreshingId === connection.id}
                   className={`w-full ${
                     refreshingId === connection.id

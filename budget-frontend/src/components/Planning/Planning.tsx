@@ -1,14 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../client/api/client.ts';
 import { ArrowLeftIcon, ArrowRightIcon, Squares2X2Icon, Bars3Icon, CalendarDaysIcon, CalendarIcon, PencilSquareIcon, PlusCircleIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon, BanknotesIcon } from '@heroicons/react/24/outline';
-import { PlusIcon, TrashIcon as SolidTrashIcon, ChevronUpDownIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, TrashIcon as SolidTrashIcon, ChevronUpDownIcon, TagIcon } from '@heroicons/react/24/solid';
 import { Combobox } from '@headlessui/react';
+
+// Define TypeScript interfaces
+interface Category {
+    id: string;
+    name: string;
+    user_id: string;
+    main_categories?: number[];
+}
+
+interface MainCategory {
+    id: number;
+    name: string;
+    user_id: string;
+}
 
 const Planning = () => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [budgetLimits, setBudgetLimits] = useState({});
     const [spentAmounts, setSpentAmounts] = useState({}); 
-    const [categories, setCategories] = useState([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [expensesData, setExpensesData] = useState([]); 
     const [selectedCategoryId, setSelectedCategoryId] = useState(null);
     const [selectedCategoryName, setSelectedCategoryName] = useState(null);
@@ -31,6 +45,8 @@ const Planning = () => {
     const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
     const [editingIncome, setEditingIncome] = useState(false);
 
+    const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
+
     const today = new Date();
     const formattedDate = `${today.getDate()} / ${today.getMonth() + 1} / ${today.getFullYear()}`;
 
@@ -38,6 +54,10 @@ const Planning = () => {
         try {
             const response = await api.get('/transactions/categories');
             setCategories(response.data.categories);
+            
+            // Also fetch main categories
+            const mainCategoriesResponse = await api.get('/transactions/main-categories');
+            setMainCategories(mainCategoriesResponse.data.main_categories);
         } catch (error) {
             console.error('Failed to fetch categories', error);
         }
@@ -341,6 +361,18 @@ const Planning = () => {
     // Calculate balance (income - expenses)
     const balance = monthlyIncome - totalPlannedExpenses;
 
+    // Helper function to get main category names for a category
+    const getMainCategoryName = (category: Category): string | null => {
+        if (!category.main_categories || category.main_categories.length === 0) {
+            return null;
+        }
+
+        // Just get the first main category for display in the card
+        const mainCategoryId = category.main_categories[0];
+        const mainCategory = mainCategories.find(mc => mc.id === mainCategoryId);
+        return mainCategory ? mainCategory.name : null;
+    };
+
     return (
         <div className="container mx-auto p-4">
             {plans.length === 0 ? (
@@ -452,9 +484,19 @@ const Planning = () => {
                                 const spentAmount = spentAmounts[category.id] || 0;
                                 const limit = budgetLimits[category.id] || 0;
                                 const progress = limit > 0 ? (spentAmount / limit) * 100 : spentAmount;
+                                const mainCategoryName = getMainCategoryName(category);
+                                
                                 return (
                                     <div key={category.id} className="flex items-center justify-between mb-2 p-2 border rounded bg-gray-100 shadow-sm">
-                                        <span className="flex-1 text-left text-gray-700 font-medium truncate mr-2">{category.name}</span>
+                                        <div className="flex flex-col flex-1 mr-2">
+                                            {mainCategoryName && (
+                                                <span className="text-base text-white font-medium flex items-center bg-indigo-600 px-4 py-2 rounded-full mb-2 w-fit">
+                                                    <TagIcon className="w-4 h-4 mr-2" />
+                                                    {mainCategoryName}
+                                                </span>
+                                            )}
+                                            <span className="text-left text-gray-700 font-medium truncate">{category.name}</span>
+                                        </div>
                                         <div className="relative w-full mx-2">
                                             <div className="bg-gray-300 h-2 rounded">
                                                 <div className="bg-blue-500 h-2 rounded" style={{ width: `${Math.min(progress, 100)}%` }}></div>
@@ -477,11 +519,12 @@ const Planning = () => {
                             })}
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-6">
+                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mb-6">
                             {categories.filter(category => budgetLimits[category.id]).map((category) => {
                                 const spentAmount = spentAmounts[category.id] || 0;
                                 const limit = budgetLimits[category.id] || 0;
                                 const progress = limit > 0 ? (spentAmount / limit) * 100 : spentAmount;
+                                const mainCategoryName = getMainCategoryName(category);
                                 let progressColor = 'text-blue-500';
 
                                 // Determine color based on progress
@@ -496,20 +539,39 @@ const Planning = () => {
                                 }
 
                                 return (
-                                    <div key={category.id} className={`relative group p-6 bg-white rounded-xl shadow-md hover:shadow-md transition-shadow cursor-pointer ${progressColor}`} onClick={() => openModal(category)}>
-                                        <h3 className="text-lg font-medium mb-4 text-center break-words hyphens-auto">{category.name}</h3>
-                                        <div className="relative w-32 h-32 mx-auto mb-4">
+                                    <div key={category.id} className={`relative group p-3 sm:p-5 md:p-6 bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow cursor-pointer ${progressColor}`} onClick={() => openModal(category)}>
+                                        {mainCategoryName && (
+                                            <div className="absolute top-2 left-2 sm:top-3 md:top-4 sm:left-3 md:left-4">
+                                                <span className="text-xs sm:text-base md:text-lg text-white font-medium flex items-center bg-indigo-600 px-2 py-1 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-full shadow-md">
+                                                    <TagIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2 md:mr-2.5" />
+                                                    {mainCategoryName}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <h3 className={`text-sm sm:text-lg md:text-xl font-medium text-center break-words hyphens-auto ${mainCategoryName ? 'mt-8 sm:mt-14 md:mt-16 mb-2 sm:mb-4 md:mb-5' : 'mb-2 sm:mb-4 md:mb-5'}`}>{category.name}</h3>
+                                        <div className="relative w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 mx-auto mb-2 sm:mb-4 md:mb-5">
                                             <svg className="w-full h-full" viewBox="0 0 100 100">
                                                 <circle className="text-gray-200" strokeWidth="8" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
-                                                <circle className={`${progressColor}`} strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * (Math.min(progress, 100) / 100))} strokeLinecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                                                <circle 
+                                                    className={progressColor} 
+                                                    strokeWidth="8" 
+                                                    strokeDasharray="251.2" 
+                                                    strokeDashoffset={251.2 - (251.2 * (Math.min(progress, 100) / 100))} 
+                                                    strokeLinecap="round" 
+                                                    stroke="currentColor" 
+                                                    fill="transparent" 
+                                                    r="40" 
+                                                    cx="50" 
+                                                    cy="50" 
+                                                />
                                             </svg>
                                             <div className="absolute inset-0 flex items-center justify-center">
-                                                <span className="text-2xl font-bold text-gray-700">{Math.round(progress)}%</span>
+                                                <span className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-700">{Math.round(progress)}%</span>
                                             </div>
                                         </div>
-                                        <div className="text-center">
-                                            <p className='text-sm text-gray-600 break-words'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
-                                            <span className="text-xs text-gray-500">of limit</span>
+                                        <div className="text-center mb-1 sm:mb-2 md:mb-3">
+                                            <p className='text-xs sm:text-sm md:text-base font-medium text-gray-700'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
+                                            <span className="text-xs sm:text-sm text-gray-500">of limit</span>
                                         </div>
                                         <button
                                             onClick={(event) => {
@@ -517,10 +579,10 @@ const Planning = () => {
                                                 setCategoryToDelete(category.id);
                                                 setIsDeleteConfirmationModalOpen(true);
                                             }}
-                                            className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center absolute top-4 right-4'
+                                            className='bg-red-500 hover:bg-red-600 text-white px-1 py-0.5 sm:px-2.5 sm:py-1 md:px-3 md:py-1.5 rounded-md flex items-center absolute top-2 right-2 sm:top-3 sm:right-3 md:top-4 md:right-4'
                                         >
-                                            <SolidTrashIcon className='w-4 h-4 mr-1' />
-                                            Delete
+                                            <SolidTrashIcon className='w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 mr-0.5 sm:mr-1 md:mr-1.5' />
+                                            <span className="text-xs sm:text-sm md:text-base">Delete</span>
                                         </button>
                                     </div>
                                 );
@@ -592,7 +654,7 @@ const Planning = () => {
                                             <Combobox.Input
                                                 className='w-full p-2 border rounded-md'
                                                 placeholder='Select a category'
-                                                displayValue={(category: { name: string }) => category?.name}
+                                                displayValue={(category: Category | null) => category?.name || ''}
                                                 onChange={(event) => setQuery(event.target.value)}
                                             />
                                             <Combobox.Button className='absolute inset-y-0 right-0 flex items-center pr-2'>

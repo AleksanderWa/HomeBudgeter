@@ -20,11 +20,11 @@ import UploadPage from './components/Upload/Upload.tsx'
 import PlanningPage from './components/Planning/Planning.tsx'
 import Banking from './components/Banking/Banking.tsx'
 import BankCallback from './components/Banking/BankCallback.tsx'
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+import Vault from './components/Vault/Vault.tsx'
 
 // Configure axios defaults and interceptors
-axios.defaults.baseURL = API_URL;
+axios.defaults.baseURL = 'http://localhost:8000/api';
+axios.defaults.withCredentials = true;
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -67,6 +67,7 @@ const AppContent: React.FC = () => {
             <Route path="/category-assignment" element={<CategoryAssignment />} />
             <Route path="/banking" element={<Banking />} />
             <Route path="/bank-callback" element={<BankCallback />} />
+            <Route path="/vault" element={<Vault />} />
           </Route>
         </Routes>
       </main>

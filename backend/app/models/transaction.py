@@ -1,8 +1,14 @@
 from ..database.database import Base
-from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index, Table, CheckConstraint, Boolean
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, UniqueConstraint, DateTime, Index, Table, CheckConstraint, Boolean, Enum as SQLAlchemyEnum
 from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from enum import Enum
+
+
+class TransactionType(str, Enum):
+    CASH = "cash"
+    DIGITAL = "digital"
 
 
 class BankConnection(Base):
@@ -43,7 +49,7 @@ class Transaction(Base):
     bank_transaction_id = Column(String, unique=True, nullable=True)
     account_name = Column(String, nullable=True)
     merchant_name = Column(String, nullable=True, index=True)
-    transaction_type = Column(String, nullable=True)
+    transaction_type = Column(SQLAlchemyEnum(TransactionType), nullable=True)
     bank_connection_id = Column(Integer, ForeignKey("bank_connections.id"), nullable=True)
 
     # Relationships
@@ -167,3 +173,16 @@ class TransactionFilterRule(Base):
         UniqueConstraint('user_id', 'merchant_name', name='_user_merchant_filter_uc'),
         Index('ix_filter_rules_user_id', 'user_id'),
     )
+
+
+class Vault(Base):
+    __tablename__ = "vaults"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    amount = Column(DECIMAL(precision=10, scale=2), nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User")

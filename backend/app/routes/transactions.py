@@ -406,6 +406,7 @@ def create_transaction(
         category_id=category.id,
         amount=amount,
         user_id=current_user.id,
+        transaction_type=transaction_data.transaction_type,
     )
 
     db.add(new_transaction)
@@ -422,6 +423,7 @@ def create_transaction(
         ),
         amount=new_transaction.amount,
         user_id=new_transaction.user_id,
+        transaction_type=new_transaction.transaction_type,
     )
 
     return transaction_response

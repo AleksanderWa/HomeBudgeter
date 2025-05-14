@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime, date
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 from decimal import Decimal
+from ..models.transaction import TransactionType
 
 
 # Base schemas
@@ -82,6 +83,7 @@ class TransactionCreate(BaseModel):
     category: str
     amount: Decimal = Field(..., decimal_places=2)
     account: Optional[str] = "default"
+    transaction_type: Optional[TransactionType] = TransactionType.DIGITAL
 
     @validator("amount", pre=True)
     def convert_to_decimal(cls, v):
@@ -147,9 +149,14 @@ class TransactionEdit(BaseModel):
     user_id: int
 
 
-class TransactionResponse(TransactionBase):
+class TransactionResponse(BaseModel):
     id: int
+    operation_date: date
+    description: str
+    category: Optional[CategoryInTransaction] = None
+    amount: Decimal
     user_id: int
+    transaction_type: Optional[TransactionType] = None
 
 
 class TransactionUpdate(BaseModel):
@@ -368,6 +375,37 @@ class TransactionFilterRuleResponse(TransactionFilterRuleBase):
     user_id: int
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+# Schemas for Rare Expenses Feature
+class RareExpenseItem(BaseModel):
+    category_name: str
+    amount: Decimal
+    due_month: int
+    due_year: int
+
+    class Config:
+        orm_mode = True
+
+
+class SavingsSuggestionItem(BaseModel):
+    month: int
+    year: int
+    suggested_amount: Decimal
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            Decimal: lambda v: float(round(v, 2))
+        }
+
+
+class RareExpensesResponse(BaseModel):
+    rare_expenses: List[RareExpenseItem]
+    savings_suggestions: List[SavingsSuggestionItem]
 
     class Config:
         orm_mode = True

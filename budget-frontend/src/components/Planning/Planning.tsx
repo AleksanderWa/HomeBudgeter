@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import api from '../../client/api/client.ts';
+import api, { getRareExpensesSummary } from '../../client/api/client.ts';
+import { RareExpensesResponse, RareExpenseItem, SavingsSuggestionItem } from '../../client/api/types.ts';
 import { ArrowLeftIcon, ArrowRightIcon, Squares2X2Icon, Bars3Icon, CalendarDaysIcon, CalendarIcon, PencilSquareIcon, PlusCircleIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import { PlusIcon, TrashIcon as SolidTrashIcon, ChevronUpDownIcon, TagIcon } from '@heroicons/react/24/solid';
 import { Combobox } from '@headlessui/react';
@@ -24,7 +25,7 @@ const Planning = () => {
     const [spentAmounts, setSpentAmounts] = useState({}); 
     const [categories, setCategories] = useState<Category[]>([]);
     const [expensesData, setExpensesData] = useState([]); 
-    const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [selectedCategoryName, setSelectedCategoryName] = useState(null);
     const [limit, setLimit] = useState('');
     const [plans, setPlans] = useState([]);
@@ -32,7 +33,7 @@ const Planning = () => {
     const [selectedPlanId, setSelectedPlanId] = useState(null);
     const [isListView, setIsListView] = useState(false);
     const [isAddLimitModalOpen, setIsAddLimitModalOpen] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [isDeleteConfirmationModalOpen, setIsDeleteConfirmationModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
     const [query, setQuery] = useState('');
@@ -47,8 +48,14 @@ const Planning = () => {
 
     const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
 
+    // State for Rare Expenses
+    const [rareExpensesData, setRareExpensesData] = useState<RareExpensesResponse | null>(null);
+    const [isRareExpensesModalOpen, setIsRareExpensesModalOpen] = useState(false);
+
     const today = new Date();
     const formattedDate = `${today.getDate()} / ${today.getMonth() + 1} / ${today.getFullYear()}`;
+    const currentDisplayMonth = today.getMonth() + 1; // For highlighting current month in modal
+    const currentDisplayYear = today.getFullYear(); // For highlighting current month in modal
 
     const fetchCategories = async (month?: number) => {
         try {
@@ -117,24 +124,40 @@ const Planning = () => {
                 }, {});
                 setSpentAmounts(updatedSpentAmounts);
 
-                const updatedBudgetLimits = response.data.reduce((acc, item) => {
-                    acc[item.category_id] = item.limit;
-                    return acc;
-                }, {});
-                setBudgetLimits(updatedBudgetLimits);
+                // const updatedBudgetLimits = response.data.reduce((acc, item) => {
+                //     acc[item.category_id] = item.limit;
+                //     return acc;
+                // }, {});
+                // setBudgetLimits(updatedBudgetLimits);
             } catch (error) {
                 console.error('Failed to fetch expenses summary', error);
             }
         };
 
+        const fetchRareData = async () => {
+            try {
+                setIsLoading(true);
+                const data = await getRareExpensesSummary();
+                setRareExpensesData(data);
+            } catch (error) {
+                console.error('Failed to fetch rare expenses summary', error);
+                // Optionally, set an error state here to display to the user
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
         const initData = async () => {
+            setIsLoading(true);
             await fetchCategories(selectedMonth);
             await fetchPlans(selectedMonth);
             await fetchExpenses();
+            await fetchRareData(); // Call the new fetch function
+            setIsLoading(false);
         }
 
         initData();
-    }, []); // Only run on component mount
+    }, []); // Only run on component mount - selectedMonth dependency removed for rare expenses as it's a 12-month forecast
 
     const openModal = (category) => {
         setSelectedCategoryId(category.id);
@@ -182,6 +205,11 @@ const Planning = () => {
     };
 
     const handleLimitSubmit = async () => {
+        if (!selectedCategoryId) {
+            console.error("selectedCategoryId is null, cannot submit limit update.");
+            alert("Error: No category selected for updating limit.");
+            return;
+        }
         try {
             // Get the most up-to-date plan ID for the current month
             const currentYear = new Date().getFullYear();
@@ -373,6 +401,13 @@ const Planning = () => {
         return mainCategory ? mainCategory.name : null;
     };
 
+    // Helper to format month number to month name
+    const getMonthName = (monthNumber: number) => {
+        const date = new Date();
+        date.setMonth(monthNumber - 1);
+        return date.toLocaleString('en-US', { month: 'long' });
+    };
+
     return (
         <div className="container mx-auto p-4">
             {plans.length === 0 ? (
@@ -470,6 +505,19 @@ const Planning = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                    
+                    {/* Button to open Rare Expenses Modal - MOVED HERE */}
+                    <div className="my-6">
+                        <button
+                            onClick={() => setIsRareExpensesModalOpen(true)}
+                            className={`w-full md:w-auto flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-150 ease-in-out
+                                ${rareExpensesData && rareExpensesData.rare_expenses.length > 0 ? 'animate-pulse ring-2 ring-purple-400 ring-offset-2 ring-offset-gray-100' : ''}
+                            `}
+                        >
+                            <CalendarDaysIcon className="w-5 h-5 mr-2" />
+                            View Upcoming Rare Expenses & Savings Plan
+                        </button>
                     </div>
                     
                     <button onClick={toggleView} className="mb-4 p-2 rounded border border-gray-300 flex items-center bg-transparent">
@@ -765,6 +813,75 @@ const Planning = () => {
                                     >
                                         <SolidTrashIcon className="w-5 h-5 mr-1" />
                                         Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Rare Expenses Modal */}
+                    {isRareExpensesModalOpen && rareExpensesData && (
+                        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-2xl font-bold text-gray-800">Rare Expenses & Savings</h2>
+                                    <button
+                                        onClick={() => setIsRareExpensesModalOpen(false)}
+                                        className="text-gray-400 hover:text-gray-600"
+                                    >
+                                        <XMarkIcon className="h-6 w-6" />
+                                    </button>
+                                </div>
+
+                                {/* Upcoming Rare Expenses Section */}
+                                <div className="mt-2 p-4 bg-gray-50 shadow rounded-lg">
+                                    <h3 className="text-xl font-semibold mb-4 text-gray-700">Upcoming Rare Expenses (Next 12 Months)</h3>
+                                    {rareExpensesData.rare_expenses.length > 0 ? (
+                                        <ul className="divide-y divide-gray-200">
+                                            {rareExpensesData.rare_expenses.map((expense, index) => (
+                                                <li key={index} className="py-3 flex justify-between items-center">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-indigo-600">{expense.category_name}</p>
+                                                        <p className="text-xs text-gray-500">Due: {getMonthName(expense.due_month)} {expense.due_year}</p>
+                                                    </div>
+                                                    <p className="text-sm font-semibold text-gray-800">${parseFloat(expense.amount as any).toFixed(2)}</p>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-sm text-gray-500">No rare expenses planned for the next 12 months.</p>
+                                    )}
+                                </div>
+
+                                {/* Suggested Monthly Savings for Rare Expenses Section */}
+                                <div className="mt-6 p-4 bg-gray-50 shadow rounded-lg">
+                                    <h3 className="text-xl font-semibold mb-4 text-gray-700">Suggested Monthly Savings for Rare Expenses</h3>
+                                    {rareExpensesData.savings_suggestions.length > 0 ? (
+                                        <ul className="divide-y divide-gray-200">
+                                            {rareExpensesData.savings_suggestions.map((suggestion, index) => {
+                                                const isCurrentMonthSuggestion = suggestion.month === currentDisplayMonth && suggestion.year === currentDisplayYear;
+                                                return (
+                                                    <li 
+                                                        key={index} 
+                                                        className={`py-3 flex justify-between items-center transition-colors duration-200 px-3 ${isCurrentMonthSuggestion ? 'bg-purple-200 ring-2 ring-purple-500 shadow-lg rounded-md' : ''}`}
+                                                    >
+                                                        <p className={`text-sm ${isCurrentMonthSuggestion ? 'font-semibold text-purple-800' : 'font-medium text-gray-700'}`}>{getMonthName(suggestion.month)} {suggestion.year}</p>
+                                                        <p className={`text-sm ${isCurrentMonthSuggestion ? 'font-bold text-green-700' : 'font-semibold text-green-600'}`}>+ ${parseFloat(suggestion.suggested_amount as any).toFixed(2)}</p>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-sm text-gray-500">No savings suggestions available at the moment.</p>
+                                    )}
+                                </div>
+                                <div className="mt-6 flex justify-end">
+                                    <button
+                                        onClick={() => setIsRareExpensesModalOpen(false)}
+                                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 flex items-center"
+                                    >
+                                        <XMarkIcon className="w-5 h-5 mr-1 text-gray-500" />
+                                        Close
                                     </button>
                                 </div>
                             </div>

@@ -6,7 +6,8 @@ import {
   ListBulletIcon, // Changed from ChartBarIcon for consistency with other list views
   CalendarDaysIcon, // Added for Planning
   TagIcon,          // Added for Categories
-  BuildingLibraryIcon // Added for Banking
+  BuildingLibraryIcon, // Added for Banking
+  WalletIcon        // Added for Vault
 } from '@heroicons/react/24/outline';
 
 export default function MobileNav() {
@@ -21,12 +22,13 @@ export default function MobileNav() {
     { path: '/planning', icon: CalendarDaysIcon, label: 'Planning' },
     { path: '/category', icon: TagIcon, label: 'Categories' },
     { path: '/banking', icon: BuildingLibraryIcon, label: 'Banking' },
+    { path: '/vault', icon: WalletIcon, label: 'Vault' },
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg sm:hidden z-50">
       {/* Navigation grid */}
-      <div className="grid grid-cols-5 items-center h-14">
+      <div className="grid grid-cols-6 items-center h-14">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);

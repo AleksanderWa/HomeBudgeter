@@ -421,7 +421,7 @@ export default function ExpenseList({
     }
     
     return filteredExpenses.reduce((acc, expense) => {
-      const amount = expense.amount;
+      const amount = parseFloat(expense.amount); // Explicitly convert to number
       
       if (amount < 0) {
         // It's an expense (negative amount)

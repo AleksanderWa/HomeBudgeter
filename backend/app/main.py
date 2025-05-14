@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from backend.app.routes import auth, transactions, plans, bank_integration, main_categories
+from backend.app.routers import vault
 from backend.app.database.database import engine
 from backend.app.models import user, transaction
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ app.include_router(router=transactions.router, prefix="/api/transactions", tags=
 app.include_router(router=plans.router, prefix="/api/plans", tags=["plans"])
 app.include_router(router=bank_integration.router, prefix="/api/bank", tags=["bank"])
 app.include_router(router=main_categories.router, prefix="/api/transactions/main-categories", tags=["main_categories"])
+app.include_router(router=vault.router)
 
 
 # Add CORS middleware if needed
@@ -25,7 +27,13 @@ allow_origins = os.getenv("ALLOW_ORIGINS", "").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins or ["http://localhost:3000", "http://localhost:3100", "http://localhost:5173"],
+    allow_origins=allow_origins
+    or [
+        "http://localhost:3000",
+        "http://localhost:3100",
+        "http://localhost:5173",
+        "http://localhost:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

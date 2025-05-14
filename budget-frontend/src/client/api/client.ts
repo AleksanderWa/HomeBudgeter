@@ -2,8 +2,10 @@
 import axios from 'axios';
 import type { RareExpensesResponse } from './types'; // Import the new type
 
+console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
   withCredentials: true,
 });
 

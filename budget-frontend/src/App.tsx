@@ -23,7 +23,7 @@ import BankCallback from './components/Banking/BankCallback.tsx'
 import Vault from './components/Vault/Vault.tsx'
 
 // Configure axios defaults and interceptors
-axios.defaults.baseURL = 'http://localhost:8000/api';
+axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use(
   (config) => {

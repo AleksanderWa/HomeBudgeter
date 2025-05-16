@@ -59,7 +59,7 @@ export default function ExpenseList({
   
   // Add state for main categories
   const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
-  const [selectedMainCategory, setSelectedMainCategory] = useState<number | null>(null);
+  const [selectedMainCategory, setSelectedMainCategory] = useState<number[]>([]);
   const [showMainCategoryFilters, setShowMainCategoryFilters] = useState(false);
   const [mainCategoryMap, setMainCategoryMap] = useState<Record<string, number[]>>({});
 
@@ -197,9 +197,13 @@ export default function ExpenseList({
       
       // Apply main category filter (if one is selected)
       let matchesMainCategory = true;
-      if (selectedMainCategory !== null) {
-        // Check if the expense's category belongs to the selected main category
-        matchesMainCategory = mainCategoryMap[categoryName]?.includes(selectedMainCategory) || false;
+      if (selectedMainCategory.length > 0) {
+        const expenseMainCategoryIds = mainCategoryMap[categoryName] || [];
+        if (expenseMainCategoryIds.length === 0) {
+          matchesMainCategory = false;
+        } else {
+          matchesMainCategory = selectedMainCategory.some(smcId => expenseMainCategoryIds.includes(smcId));
+        }
       }
       
       return matchesSearch && isCategoryIncluded && matchesMainCategory;
@@ -216,7 +220,7 @@ export default function ExpenseList({
       if (!acc[categoryName]) {
         acc[categoryName] = 0;
       }
-      acc[categoryName] += expense.amount;
+      acc[categoryName] += parseFloat(expense.amount as string) || 0;
       return acc;
     }, {} as Record<string, number>);
   }, [filteredExpenses]);
@@ -232,10 +236,11 @@ export default function ExpenseList({
       }));
     
     // Filter by selected main category if one is selected
-    if (selectedMainCategory !== null) {
+    if (selectedMainCategory.length > 0) {
       data = data.filter(item => {
-        // Include the category if it belongs to the selected main category
-        return mainCategoryMap[item.category]?.includes(selectedMainCategory) || false;
+        const itemMainCategoryIds = mainCategoryMap[item.category] || [];
+        if (itemMainCategoryIds.length === 0) return false;
+        return selectedMainCategory.some(smcId => itemMainCategoryIds.includes(smcId));
       });
     }
     
@@ -616,9 +621,9 @@ export default function ExpenseList({
                   <h4 className="text-xs font-semibold mb-2">Filter by Main Category</h4>
                   <div className="flex flex-wrap gap-1">
                     <button
-                      onClick={() => setSelectedMainCategory(null)}
+                      onClick={() => setSelectedMainCategory([])}
                       className={`px-2 py-0.5 text-xs rounded-full flex items-center ${
-                        selectedMainCategory === null 
+                        selectedMainCategory.length === 0 
                           ? 'bg-indigo-600 text-white' 
                           : 'bg-gray-200 text-gray-700'
                       }`}
@@ -628,17 +633,22 @@ export default function ExpenseList({
                     {mainCategories.map(mainCategory => (
                       <button
                         key={mainCategory.id}
-                        onClick={() => setSelectedMainCategory(
-                          selectedMainCategory === mainCategory.id ? null : mainCategory.id
-                        )}
+                        onClick={() => {
+                          const mainCatId = mainCategory.id;
+                          setSelectedMainCategory(prev =>
+                            prev.includes(mainCatId)
+                              ? prev.filter(id => id !== mainCatId)
+                              : [...prev, mainCatId]
+                          );
+                        }}
                         className={`px-2 py-0.5 text-xs rounded-full flex items-center ${
-                          selectedMainCategory === mainCategory.id
+                          selectedMainCategory.includes(mainCategory.id)
                             ? 'bg-indigo-600 text-white'
                             : 'bg-gray-200 text-gray-700'
                         }`}
                       >
                         <span className="truncate max-w-[80px]">{mainCategory.name}</span>
-                        {selectedMainCategory === mainCategory.id && (
+                        {selectedMainCategory.includes(mainCategory.id) && (
                           <XMarkIcon className="w-3 h-3 ml-1 flex-shrink-0" />
                         )}
                       </button>

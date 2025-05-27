@@ -273,13 +273,16 @@ class CategoryLimitResponse(BaseModel):
     user_id: int
     plan_id: int
     limit: float
+    is_draft: bool = False
 
 
 class TransactionSummaryResponse(BaseModel):
+    id: Optional[int] = None
     category_id: int
     category_name: str
     expenses: float
     limit: float
+    is_draft: bool = False
     month: int
 
 

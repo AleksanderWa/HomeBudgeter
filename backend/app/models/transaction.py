@@ -114,6 +114,7 @@ class CategoryLimit(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     plan_id = Column(Integer, ForeignKey('plans.id'), nullable=False)
     limit = Column(DECIMAL(precision=10, scale=2), nullable=False)
+    is_draft = Column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
         UniqueConstraint('category_id', 'plan_id', name='_category_plan_uc'),

@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../client/api/client.ts';
 import { useAuth } from '../../contexts/AuthContext.tsx';
 
 interface VaultEntry {
   id: number;
-  amount: number;
+  amount: string | number;
   description: string;
   created_at: string;
   updated_at: string;
 }
 
 interface VaultBalance {
-  amount: number;
+  amount: string | number;
   description: string;
 }
 
@@ -29,8 +29,8 @@ const Vault: React.FC = () => {
   const fetchVaultBalance = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/vault');
-      if (response.data && typeof response.data.amount === 'number') {
+      const response = await api.get('/vault');
+      if (response.data && (typeof response.data.amount === 'number' || typeof response.data.amount === 'string')) {
         setBalance(response.data);
       } else {
         console.error('Received invalid balance data from backend:', response.data);
@@ -47,7 +47,7 @@ const Vault: React.FC = () => {
   const fetchVaultEntries = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/vault/history');
+      const response = await api.get('/vault/history');
       setEntries(response.data);
     } catch (err) {
       setError('Failed to fetch vault entries');
@@ -67,7 +67,7 @@ const Vault: React.FC = () => {
     
     try {
       setLoading(true);
-      await axios.post('/vault', {
+      await api.post('/vault', {
         amount: parseFloat(amount),
         description: description || 'Cash deposit'
       });
@@ -93,7 +93,7 @@ const Vault: React.FC = () => {
     
     try {
       setLoading(true);
-      await axios.post('/vault', {
+      await api.post('/vault', {
         amount: -Math.abs(parseFloat(removeAmount)),
         description: removeDescription || 'Cash withdrawal'
       });
@@ -112,7 +112,7 @@ const Vault: React.FC = () => {
   const handleDeleteEntry = async (id: number) => {
     try {
       setLoading(true);
-      await axios.delete(`/vault/${id}`);
+      await api.delete(`/vault/${id}`);
       fetchVaultBalance();
       fetchVaultEntries();
     } catch (err) {
@@ -156,7 +156,7 @@ const Vault: React.FC = () => {
           <p>Loading balance...</p>
         ) : balance ? (
           <div className="text-4xl font-bold text-green-600">
-            ${balance && typeof balance.amount === 'number' && isFinite(balance.amount) ? balance.amount.toFixed(2) : '0.00'}
+            ${balance ? parseFloat(balance.amount.toString()).toFixed(2) : '0.00'}
           </div>
         ) : (
           <p>Balance not available</p>
@@ -288,9 +288,9 @@ const Vault: React.FC = () => {
                       {entry.description}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${
-                      entry.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                      parseFloat(entry.amount.toString()) >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      ${typeof entry.amount === 'number' && isFinite(entry.amount) ? Number(entry.amount).toFixed(2) : '0.00'}
+                      ${parseFloat(entry.amount.toString()).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <button

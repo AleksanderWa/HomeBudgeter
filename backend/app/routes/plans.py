@@ -115,6 +115,7 @@ async def update_category_limit(
         user_id=db_category_limit.user_id,
         plan_id=db_category_limit.plan_id,
         limit=db_category_limit.limit,
+        is_draft=db_category_limit.is_draft,
     )
 
 
@@ -139,6 +140,7 @@ async def get_category_limits(
             user_id=category_limit.user_id,
             plan_id=category_limit.plan_id,
             limit=category_limit.limit,
+            is_draft=category_limit.is_draft,
         )
         for category_limit in category_limits
     ]
@@ -222,6 +224,7 @@ async def create_category_limit(
         category_id=db_category_limit.category_id,
         user_id=current_user.id,
         limit=db_category_limit.limit,
+        is_draft=db_category_limit.is_draft,
     )
 
 
@@ -376,3 +379,40 @@ async def get_rare_expenses_summary(
         user_id=current_user.id, db=db
     )
     return summary
+
+
+@router.post("/{plan_id}/category_limits/{category_limit_id}/accept", response_model=CategoryLimitResponse)
+async def accept_draft_category_limit(
+    plan_id: int,
+    category_limit_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Find the draft category limit
+    db_category_limit = (
+        db.query(CategoryLimit)
+        .filter(
+            CategoryLimit.id == category_limit_id,
+            CategoryLimit.plan_id == plan_id,
+            CategoryLimit.user_id == current_user.id,
+            CategoryLimit.is_draft == True,
+        )
+        .first()
+    )
+
+    if not db_category_limit:
+        raise HTTPException(status_code=404, detail="Draft category limit not found")
+
+    # Accept the draft by setting is_draft to False
+    db_category_limit.is_draft = False
+    db.commit()
+    db.refresh(db_category_limit)
+
+    return CategoryLimitResponse(
+        id=db_category_limit.id,
+        category_id=db_category_limit.category_id,
+        user_id=db_category_limit.user_id,
+        plan_id=db_category_limit.plan_id,
+        limit=db_category_limit.limit,
+        is_draft=db_category_limit.is_draft,
+    )

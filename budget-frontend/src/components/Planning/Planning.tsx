@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import api from '../../client/api/client.ts';
+import api, { getRareExpensesSummary } from '../../client/api/client.ts';
+import { RareExpensesResponse, RareExpenseItem, SavingsSuggestionItem } from '../../client/api/types.ts';
 import { ArrowLeftIcon, ArrowRightIcon, Squares2X2Icon, Bars3Icon, CalendarDaysIcon, CalendarIcon, PencilSquareIcon, PlusCircleIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import { PlusIcon, TrashIcon as SolidTrashIcon, ChevronUpDownIcon, TagIcon } from '@heroicons/react/24/solid';
 import { Combobox } from '@headlessui/react';
@@ -18,13 +19,24 @@ interface MainCategory {
     user_id: string;
 }
 
+interface ExpenseData {
+    id?: number;
+    category_id: number;
+    category_name: string;
+    expenses: number;
+    limit: number;
+    is_draft: boolean;
+    month: number;
+}
+
 const Planning = () => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [budgetLimits, setBudgetLimits] = useState({});
+    const [draftStatus, setDraftStatus] = useState({}); // Track which limits are drafts
     const [spentAmounts, setSpentAmounts] = useState({}); 
     const [categories, setCategories] = useState<Category[]>([]);
-    const [expensesData, setExpensesData] = useState([]); 
-    const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+    const [expensesData, setExpensesData] = useState<ExpenseData[]>([]); 
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [selectedCategoryName, setSelectedCategoryName] = useState(null);
     const [limit, setLimit] = useState('');
     const [plans, setPlans] = useState([]);
@@ -32,7 +44,7 @@ const Planning = () => {
     const [selectedPlanId, setSelectedPlanId] = useState(null);
     const [isListView, setIsListView] = useState(false);
     const [isAddLimitModalOpen, setIsAddLimitModalOpen] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [isDeleteConfirmationModalOpen, setIsDeleteConfirmationModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
     const [query, setQuery] = useState('');
@@ -47,8 +59,14 @@ const Planning = () => {
 
     const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
 
+    // State for Rare Expenses
+    const [rareExpensesData, setRareExpensesData] = useState<RareExpensesResponse | null>(null);
+    const [isRareExpensesModalOpen, setIsRareExpensesModalOpen] = useState(false);
+
     const today = new Date();
     const formattedDate = `${today.getDate()} / ${today.getMonth() + 1} / ${today.getFullYear()}`;
+    const currentDisplayMonth = today.getMonth() + 1; // For highlighting current month in modal
+    const currentDisplayYear = today.getFullYear(); // For highlighting current month in modal
 
     const fetchCategories = async (month?: number) => {
         try {
@@ -72,14 +90,8 @@ const Planning = () => {
             const selectedPlan = response.data.find(plan => plan.month === monthToFetch);
             if (selectedPlan) {
                 setSelectedPlanId(selectedPlan.id);
-                // Fetch category limits for the selected plan
-                const limitsResponse = await api.get(`/plans/${selectedPlan.id}/category_limits`);
-                const limits = limitsResponse.data.reduce((acc, limit) => {
-                    acc[limit.category_id] = limit.limit;
-                    return acc;
-                }, {});
-                setBudgetLimits(limits);
-                console.log('Budget limits for month', monthToFetch, 'using plan ID', selectedPlan.id, 'limits:', limits);
+                // Don't fetch category limits here - let expenses summary be the source of truth
+                console.log('Selected plan ID', selectedPlan.id, 'for month', monthToFetch);
                 
                 // Fetch income for this plan
                 try {
@@ -95,7 +107,7 @@ const Planning = () => {
                 return selectedPlan.id;
             } else {
                 console.log('No plan found for month', monthToFetch);
-                setBudgetLimits({});
+                // Don't clear budget limits here - let expenses summary handle it
                 setSelectedPlanId(null);
                 setMonthlyIncome(0);
                 setIncomeDescription("");
@@ -122,15 +134,37 @@ const Planning = () => {
                     return acc;
                 }, {});
                 setBudgetLimits(updatedBudgetLimits);
+
+                const updatedDraftStatus = response.data.reduce((acc, item) => {
+                    acc[item.category_id] = item.is_draft || false;
+                    return acc;
+                }, {});
+                setDraftStatus(updatedDraftStatus);
             } catch (error) {
                 console.error('Failed to fetch expenses summary', error);
             }
         };
 
+        const fetchRareData = async () => {
+            try {
+                setIsLoading(true);
+                const data = await getRareExpensesSummary();
+                setRareExpensesData(data);
+            } catch (error) {
+                console.error('Failed to fetch rare expenses summary', error);
+                // Optionally, set an error state here to display to the user
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
         const initData = async () => {
+            setIsLoading(true);
             await fetchCategories(selectedMonth);
             await fetchPlans(selectedMonth);
-            await fetchExpenses();
+            await fetchExpenses(); // This will now use the selectedPlanId set by fetchPlans
+            await fetchRareData(); // Call the new fetch function
+            setIsLoading(false);
         }
 
         initData();
@@ -182,6 +216,11 @@ const Planning = () => {
     };
 
     const handleLimitSubmit = async () => {
+        if (!selectedCategoryId) {
+            console.error("selectedCategoryId is null, cannot submit limit update.");
+            alert("Error: No category selected for updating limit.");
+            return;
+        }
         try {
             // Get the most up-to-date plan ID for the current month
             const currentYear = new Date().getFullYear();
@@ -250,6 +289,18 @@ const Planning = () => {
                 return acc;
             }, {});
             setSpentAmounts(updatedSpentAmounts);
+
+            const updatedBudgetLimits = response.data.reduce((acc, item) => {
+                acc[item.category_id] = item.limit;
+                return acc;
+            }, {});
+            setBudgetLimits(updatedBudgetLimits);
+
+            const updatedDraftStatus = response.data.reduce((acc, item) => {
+                acc[item.category_id] = item.is_draft || false;
+                return acc;
+            }, {});
+            setDraftStatus(updatedDraftStatus);
         } catch (error) {
             console.error('Failed to fetch expenses summary', error);
         }
@@ -322,36 +373,38 @@ const Planning = () => {
 
     const handleDeleteLimit = async (categoryId: string) => {
         try {
-            // Get the most up-to-date plan ID for the current month
-            const currentYear = new Date().getFullYear();
-            const plansResponse = await api.get(`/plans/?year=${currentYear}`);
-            const currentPlans = plansResponse.data;
-            const currentPlan = currentPlans.find(plan => plan.month === selectedMonth);
+            await api.delete(`/plans/${selectedPlanId}/categories/${categoryId}`);
             
-            if (!currentPlan) {
-                alert('No plan exists for the selected month. Cannot delete limit.');
-                return;
-            }
+            // Remove from local state
+            const updatedLimits = { ...budgetLimits };
+            delete updatedLimits[categoryId];
+            setBudgetLimits(updatedLimits);
             
-            // Use the plan ID from the current month
-            const planIdToUse = currentPlan.id;
-            
-            console.log(`Deleting limit from plan ID ${planIdToUse} for month ${selectedMonth}`);
-            
-            await api.delete(`/plans/${planIdToUse}/categories/${categoryId}`);
-            
-            // Refresh the category limits
-            const updatedBudgetLimits = { ...budgetLimits };
-            delete updatedBudgetLimits[categoryId];
-            setBudgetLimits(updatedBudgetLimits);
-            
-            setSelectedPlanId(planIdToUse); // Update the selected plan ID
-            
-            // Refresh plans
-            await fetchPlans(selectedMonth);
+            setIsDeleteConfirmationModalOpen(false);
+            setCategoryToDelete(null);
         } catch (error) {
             console.error('Failed to delete category limit', error);
-            alert('Failed to delete category limit. Please try again.');
+        }
+    };
+
+    const handleAcceptDraft = async (categoryId: string) => {
+        try {
+            // Find the category limit ID from expensesData
+            const categoryData = expensesData.find(item => item.category_id === parseInt(categoryId));
+            if (!categoryData || !categoryData.id) {
+                console.error('Category data or category limit ID not found');
+                return;
+            }
+
+            // Call the accept draft endpoint
+            await api.post(`/plans/${selectedPlanId}/category_limits/${categoryData.id}/accept`);
+            
+            // Update local state to mark as not draft
+            const updatedDraftStatus = { ...draftStatus };
+            updatedDraftStatus[categoryId] = false;
+            setDraftStatus(updatedDraftStatus);
+        } catch (error) {
+            console.error('Failed to accept draft category limit', error);
         }
     };
     
@@ -371,6 +424,13 @@ const Planning = () => {
         const mainCategoryId = category.main_categories[0];
         const mainCategory = mainCategories.find(mc => mc.id === mainCategoryId);
         return mainCategory ? mainCategory.name : null;
+    };
+
+    // Helper to format month number to month name
+    const getMonthName = (monthNumber: number) => {
+        const date = new Date();
+        date.setMonth(monthNumber - 1);
+        return date.toLocaleString('en-US', { month: 'long' });
     };
 
     return (
@@ -472,6 +532,19 @@ const Planning = () => {
                         </div>
                     </div>
                     
+                    {/* Button to open Rare Expenses Modal - MOVED HERE */}
+                    <div className="my-6">
+                        <button
+                            onClick={() => setIsRareExpensesModalOpen(true)}
+                            className={`w-full md:w-auto flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-150 ease-in-out
+                                ${rareExpensesData && rareExpensesData.rare_expenses.length > 0 ? 'animate-pulse ring-2 ring-purple-400 ring-offset-2 ring-offset-gray-100' : ''}
+                            `}
+                        >
+                            <CalendarDaysIcon className="w-5 h-5 mr-2" />
+                            View Upcoming Rare Expenses & Savings Plan
+                        </button>
+                    </div>
+                    
                     <button onClick={toggleView} className="mb-4 p-2 rounded border border-gray-300 flex items-center bg-transparent">
                         {isListView ? <Squares2X2Icon className="h-5 w-5" /> : <Bars3Icon className="h-5 w-5" />}
                     </button>
@@ -485,35 +558,54 @@ const Planning = () => {
                                 const limit = budgetLimits[category.id] || 0;
                                 const progress = limit > 0 ? (spentAmount / limit) * 100 : spentAmount;
                                 const mainCategoryName = getMainCategoryName(category);
+                                const isDraft = draftStatus[category.id] || false;
                                 
                                 return (
-                                    <div key={category.id} className="flex items-center justify-between mb-2 p-2 border rounded bg-gray-100 shadow-sm">
+                                    <div key={category.id} className={`flex items-center justify-between mb-2 p-2 border rounded shadow-sm ${isDraft ? 'bg-gray-100 border-dashed border-gray-400' : 'bg-gray-100'}`}>
                                         <div className="flex flex-col flex-1 mr-2">
-                                            {mainCategoryName && (
+                                            {isDraft && (
+                                                <span className="text-xs text-white font-medium flex items-center bg-gray-500 px-2 py-1 rounded-full mb-1 w-fit">
+                                                    DRAFT
+                                                </span>
+                                            )}
+                                            {mainCategoryName && !isDraft && (
                                                 <span className="text-base text-white font-medium flex items-center bg-indigo-600 px-4 py-2 rounded-full mb-2 w-fit">
                                                     <TagIcon className="w-4 h-4 mr-2" />
                                                     {mainCategoryName}
                                                 </span>
                                             )}
-                                            <span className="text-left text-gray-700 font-medium truncate">{category.name}</span>
+                                            <span className={`text-left font-medium truncate ${isDraft ? 'text-gray-600' : 'text-gray-700'}`}>{category.name}</span>
                                         </div>
                                         <div className="relative w-full mx-2">
                                             <div className="bg-gray-300 h-2 rounded">
-                                                <div className="bg-blue-500 h-2 rounded" style={{ width: `${Math.min(progress, 100)}%` }}></div>
+                                                <div className={`h-2 rounded ${isDraft ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${Math.min(progress, 100)}%` }}></div>
                                             </div>
                                         </div>
-                                        <p className='text-sm text-gray-600 whitespace-nowrap ml-1'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
-                                        <button
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                setCategoryToDelete(category.id);
-                                                setIsDeleteConfirmationModalOpen(true);
-                                            }}
-                                            className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center ml-2'
-                                        >
-                                            <SolidTrashIcon className='w-4 h-4 mr-1' />
-                                            Delete
-                                        </button>
+                                        <p className={`text-sm whitespace-nowrap ml-1 ${isDraft ? 'text-gray-500' : 'text-gray-600'}`}>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
+                                        {isDraft ? (
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleAcceptDraft(category.id);
+                                                }}
+                                                className='bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center ml-2'
+                                            >
+                                                <CheckIcon className='w-4 h-4 mr-1' />
+                                                Accept
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setCategoryToDelete(category.id);
+                                                    setIsDeleteConfirmationModalOpen(true);
+                                                }}
+                                                className='bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md flex items-center ml-2'
+                                            >
+                                                <SolidTrashIcon className='w-4 h-4 mr-1' />
+                                                Delete
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -525,10 +617,13 @@ const Planning = () => {
                                 const limit = budgetLimits[category.id] || 0;
                                 const progress = limit > 0 ? (spentAmount / limit) * 100 : spentAmount;
                                 const mainCategoryName = getMainCategoryName(category);
+                                const isDraft = draftStatus[category.id] || false;
                                 let progressColor = 'text-blue-500';
 
-                                // Determine color based on progress
-                                if (progress > 100) {
+                                // Determine color based on progress, but use grey for drafts
+                                if (isDraft) {
+                                    progressColor = 'text-gray-400';
+                                } else if (progress > 100) {
                                     progressColor = 'text-black';
                                 } else if (progress <= 50) {
                                     progressColor = 'text-green-500';
@@ -539,8 +634,15 @@ const Planning = () => {
                                 }
 
                                 return (
-                                    <div key={category.id} className={`relative group p-3 sm:p-5 md:p-6 bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow cursor-pointer ${progressColor}`} onClick={() => openModal(category)}>
-                                        {mainCategoryName && (
+                                    <div key={category.id} className={`relative group p-3 sm:p-5 md:p-6 ${isDraft ? 'bg-gray-100 border-2 border-dashed border-gray-300' : 'bg-white'} rounded-xl shadow-md hover:shadow-lg transition-shadow cursor-pointer ${progressColor}`} onClick={() => !isDraft && openModal(category)}>
+                                        {isDraft && (
+                                            <div className="absolute top-2 left-2 sm:top-3 md:top-4 sm:left-3 md:left-4 z-10">
+                                                <span className="text-xs sm:text-sm md:text-base text-white font-medium flex items-center bg-gray-500 px-2 py-1 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-full shadow-md">
+                                                    DRAFT
+                                                </span>
+                                            </div>
+                                        )}
+                                        {mainCategoryName && !isDraft && (
                                             <div className="absolute top-2 left-2 sm:top-3 md:top-4 sm:left-3 md:left-4">
                                                 <span className="text-xs sm:text-base md:text-lg text-white font-medium flex items-center bg-indigo-600 px-2 py-1 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-full shadow-md">
                                                     <TagIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2 md:mr-2.5" />
@@ -548,7 +650,7 @@ const Planning = () => {
                                                 </span>
                                             </div>
                                         )}
-                                        <h3 className={`text-sm sm:text-lg md:text-xl font-medium text-center break-words hyphens-auto ${mainCategoryName ? 'mt-8 sm:mt-14 md:mt-16 mb-2 sm:mb-4 md:mb-5' : 'mb-2 sm:mb-4 md:mb-5'}`}>{category.name}</h3>
+                                        <h3 className={`text-sm sm:text-lg md:text-xl font-medium text-center break-words hyphens-auto ${isDraft ? 'text-gray-600' : ''} ${mainCategoryName && !isDraft ? 'mt-8 sm:mt-14 md:mt-16 mb-2 sm:mb-4 md:mb-5' : isDraft ? 'mt-8 sm:mt-12 md:mt-14 mb-2 sm:mb-4 md:mb-5' : 'mb-2 sm:mb-4 md:mb-5'}`}>{category.name}</h3>
                                         <div className="relative w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 mx-auto mb-2 sm:mb-4 md:mb-5">
                                             <svg className="w-full h-full" viewBox="0 0 100 100">
                                                 <circle className="text-gray-200" strokeWidth="8" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
@@ -566,24 +668,37 @@ const Planning = () => {
                                                 />
                                             </svg>
                                             <div className="absolute inset-0 flex items-center justify-center">
-                                                <span className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-700">{Math.round(progress)}%</span>
+                                                <span className={`text-lg sm:text-2xl md:text-3xl font-bold ${isDraft ? 'text-gray-500' : 'text-gray-700'}`}>{Math.round(progress)}%</span>
                                             </div>
                                         </div>
                                         <div className="text-center mb-1 sm:mb-2 md:mb-3">
-                                            <p className='text-xs sm:text-sm md:text-base font-medium text-gray-700'>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
-                                            <span className="text-xs sm:text-sm text-gray-500">of limit</span>
+                                            <p className={`text-xs sm:text-sm md:text-base font-medium ${isDraft ? 'text-gray-500' : 'text-gray-700'}`}>{spentAmount.toLocaleString()} / {limit.toLocaleString()}</p>
+                                            <span className={`text-xs sm:text-sm ${isDraft ? 'text-gray-400' : 'text-gray-500'}`}>of limit</span>
                                         </div>
-                                        <button
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                setCategoryToDelete(category.id);
-                                                setIsDeleteConfirmationModalOpen(true);
-                                            }}
-                                            className='bg-red-500 hover:bg-red-600 text-white px-1 py-0.5 sm:px-2.5 sm:py-1 md:px-3 md:py-1.5 rounded-md flex items-center absolute top-2 right-2 sm:top-3 sm:right-3 md:top-4 md:right-4'
-                                        >
-                                            <SolidTrashIcon className='w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 mr-0.5 sm:mr-1 md:mr-1.5' />
-                                            <span className="text-xs sm:text-sm md:text-base">Delete</span>
-                                        </button>
+                                        {isDraft ? (
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleAcceptDraft(category.id);
+                                                }}
+                                                className='bg-green-500 hover:bg-green-600 text-white px-1 py-0.5 sm:px-2.5 sm:py-1 md:px-3 md:py-1.5 rounded-md flex items-center absolute bottom-2 right-2 sm:bottom-3 sm:right-3 md:bottom-4 md:right-4'
+                                            >
+                                                <CheckIcon className='w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 mr-0.5 sm:mr-1 md:mr-1.5' />
+                                                <span className="text-xs sm:text-sm md:text-base">Accept</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setCategoryToDelete(category.id);
+                                                    setIsDeleteConfirmationModalOpen(true);
+                                                }}
+                                                className='bg-red-500 hover:bg-red-600 text-white px-1 py-0.5 sm:px-2.5 sm:py-1 md:px-3 md:py-1.5 rounded-md flex items-center absolute top-2 right-2 sm:top-3 sm:right-3 md:top-4 md:right-4'
+                                            >
+                                                <SolidTrashIcon className='w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 mr-0.5 sm:mr-1 md:mr-1.5' />
+                                                <span className="text-xs sm:text-sm md:text-base">Delete</span>
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -765,6 +880,75 @@ const Planning = () => {
                                     >
                                         <SolidTrashIcon className="w-5 h-5 mr-1" />
                                         Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Rare Expenses Modal */}
+                    {isRareExpensesModalOpen && rareExpensesData && (
+                        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-2xl font-bold text-gray-800">Rare Expenses & Savings</h2>
+                                    <button
+                                        onClick={() => setIsRareExpensesModalOpen(false)}
+                                        className="text-gray-400 hover:text-gray-600"
+                                    >
+                                        <XMarkIcon className="h-6 w-6" />
+                                    </button>
+                                </div>
+
+                                {/* Upcoming Rare Expenses Section */}
+                                <div className="mt-2 p-4 bg-gray-50 shadow rounded-lg">
+                                    <h3 className="text-xl font-semibold mb-4 text-gray-700">Upcoming Rare Expenses (Next 12 Months)</h3>
+                                    {rareExpensesData.rare_expenses.length > 0 ? (
+                                        <ul className="divide-y divide-gray-200">
+                                            {rareExpensesData.rare_expenses.map((expense, index) => (
+                                                <li key={index} className="py-3 flex justify-between items-center">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-indigo-600">{expense.category_name}</p>
+                                                        <p className="text-xs text-gray-500">Due: {getMonthName(expense.due_month)} {expense.due_year}</p>
+                                                    </div>
+                                                    <p className="text-sm font-semibold text-gray-800">${parseFloat(expense.amount as any).toFixed(2)}</p>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-sm text-gray-500">No rare expenses planned for the next 12 months.</p>
+                                    )}
+                                </div>
+
+                                {/* Suggested Monthly Savings for Rare Expenses Section */}
+                                <div className="mt-6 p-4 bg-gray-50 shadow rounded-lg">
+                                    <h3 className="text-xl font-semibold mb-4 text-gray-700">Suggested Monthly Savings for Rare Expenses</h3>
+                                    {rareExpensesData.savings_suggestions.length > 0 ? (
+                                        <ul className="divide-y divide-gray-200">
+                                            {rareExpensesData.savings_suggestions.map((suggestion, index) => {
+                                                const isCurrentMonthSuggestion = suggestion.month === currentDisplayMonth && suggestion.year === currentDisplayYear;
+                                                return (
+                                                    <li 
+                                                        key={index} 
+                                                        className={`py-3 flex justify-between items-center transition-colors duration-200 px-3 ${isCurrentMonthSuggestion ? 'bg-purple-200 ring-2 ring-purple-500 shadow-lg rounded-md' : ''}`}
+                                                    >
+                                                        <p className={`text-sm ${isCurrentMonthSuggestion ? 'font-semibold text-purple-800' : 'font-medium text-gray-700'}`}>{getMonthName(suggestion.month)} {suggestion.year}</p>
+                                                        <p className={`text-sm ${isCurrentMonthSuggestion ? 'font-bold text-green-700' : 'font-semibold text-green-600'}`}>+ ${parseFloat(suggestion.suggested_amount as any).toFixed(2)}</p>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-sm text-gray-500">No savings suggestions available at the moment.</p>
+                                    )}
+                                </div>
+                                <div className="mt-6 flex justify-end">
+                                    <button
+                                        onClick={() => setIsRareExpensesModalOpen(false)}
+                                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 flex items-center"
+                                    >
+                                        <XMarkIcon className="w-5 h-5 mr-1 text-gray-500" />
+                                        Close
                                     </button>
                                 </div>
                             </div>

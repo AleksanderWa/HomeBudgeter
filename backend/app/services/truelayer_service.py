@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from dotenv import load_dotenv
 
+from backend.app.models.transaction import TransactionType
+
 # Get the absolute path to the .env file
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env_path = BASE_DIR / ".env"
@@ -161,6 +163,6 @@ class TrueLayerService:
             "bank_transaction_id": tx_data.get("transaction_id"),
             "account_name": tx_data.get("account_name", ""),
             "merchant_name": tx_data.get("merchant_name", ""),
-            "transaction_type": tx_data.get("transaction_type", ""),
+            "transaction_type": TransactionType.DIGITAL.value,
             "bank_connection_id": connection_id,
         }

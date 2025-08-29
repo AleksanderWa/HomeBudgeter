@@ -17,6 +17,7 @@ class TransactionFilterService:
             tx_data: The transaction data (either raw from bank API or formatted)
             
         Returns:
+        Returns:
             bool: True if transaction should be skipped, False otherwise
         """
         # Get all active filter rules for this user

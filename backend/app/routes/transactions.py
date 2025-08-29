@@ -406,6 +406,7 @@ def create_transaction(
         category_id=category.id,
         amount=amount,
         user_id=current_user.id,
+        transaction_type=transaction_data.transaction_type,
     )
 
     db.add(new_transaction)
@@ -422,6 +423,7 @@ def create_transaction(
         ),
         amount=new_transaction.amount,
         user_id=new_transaction.user_id,
+        transaction_type=new_transaction.transaction_type,
     )
 
     return transaction_response
@@ -585,24 +587,60 @@ def _get_expenses_summary_data(month: int, db: Session, current_user: User):
     )
 
     categories = db.query(Category).join(Transaction, Category.id == Transaction.category_id).filter(extract('month', Transaction.operation_date) == month).all()
-    limits = db.query(CategoryLimit).join(Plan).filter(
-        CategoryLimit.category_id.in_([category.id for category in categories]),
+    
+    # Get or create plan for the month
+    current_year = datetime.now().year
+    plan = db.query(Plan).filter(
         Plan.month == month,
+        Plan.year == current_year,
         Plan.user_id == current_user.id
+    ).first()
+    
+    if not plan:
+        plan = Plan(month=month, year=current_year, user_id=current_user.id)
+        db.add(plan)
+        db.commit()
+        db.refresh(plan)
+    
+    limits = db.query(CategoryLimit).filter(
+        CategoryLimit.category_id.in_([category.id for category in categories]),
+        CategoryLimit.plan_id == plan.id,
+        CategoryLimit.user_id == current_user.id
     ).all() 
     limits_dict = {limit.category_id: limit.limit for limit in limits}
+    draft_status_dict = {limit.category_id: limit.is_draft for limit in limits}
+    limit_id_dict = {limit.category_id: limit.id for limit in limits}
 
     response_data = []
     for category in categories:
         expenses = abs(sum(item[2] for item in summary if item[0] == category.id))
+        
+        # If category has no limit set, create a draft limit
+        if category.id not in limits_dict:
+            draft_limit = CategoryLimit(
+                category_id=category.id,
+                user_id=current_user.id,
+                plan_id=plan.id,
+                limit=expenses,
+                is_draft=True
+            )
+            db.add(draft_limit)
+            db.flush()  # Flush to get the ID
+            limits_dict[category.id] = expenses
+            draft_status_dict[category.id] = True
+            limit_id_dict[category.id] = draft_limit.id
+        
         response_data.append({
+            'id': limit_id_dict.get(category.id),
             'category_id': category.id,
             'category_name': category.name,
             'expenses': expenses,
             'limit': limits_dict.get(category.id, 0),
+            'is_draft': draft_status_dict.get(category.id, False),
             'month': month
         })
-
+    
+    db.commit()
     return response_data
 
 

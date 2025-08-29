@@ -10,7 +10,16 @@ import {
   TagIcon, 
   CurrencyDollarIcon, 
   XMarkIcon, 
-  CheckIcon as OutlineCheckIcon
+  CheckIcon as OutlineCheckIcon,
+  FolderIcon,
+  CreditCardIcon,
+  RectangleStackIcon,
+  ArrowPathIcon,
+  HomeIcon,
+  ChartBarIcon,
+  ListBulletIcon,
+  BuildingLibraryIcon,
+  WalletIcon
 } from '@heroicons/react/24/outline';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -25,11 +34,15 @@ export default function Navigation() {
   const [newTransaction, setNewTransaction] = useState({
     operation_date: new Date(),
     description: '',
-    category: '',
+    category: '' as string | null,
     amount: '',
     newCategory: ''
   });
-  const [formErrors, setFormErrors] = useState({
+  const [formErrors, setFormErrors] = useState<{
+    description?: string;
+    category?: string;
+    amount?: string;
+  }>({
     description: '',
     category: '',
     amount: ''
@@ -91,7 +104,7 @@ export default function Navigation() {
     setFormErrors({
       description: '',
       category: '',
-      amount: ''
+      amount: '',
     });
 
     // Validation
@@ -101,7 +114,7 @@ export default function Navigation() {
       errors.description = 'Description is required';
     }
 
-    if (!newTransaction.category.trim()) {
+    if (!newTransaction.category) {
       errors.category = 'Category is required';
     }
 
@@ -187,23 +200,29 @@ export default function Navigation() {
               </Link>
             </div>
             <div className="hidden sm:flex sm:items-center sm:space-x-4">
-              <Link to="/" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+              <Link to="/" className="text-gray-700 hover:text-gray-900 px-3 py-2 flex items-center">
+                <HomeIcon className="w-5 h-5 mr-1" />
                 Dashboard
               </Link>
-              <Link to="/list" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+              <Link to="/list" className="text-gray-700 hover:text-gray-900 px-3 py-2 flex items-center">
+                <ListBulletIcon className="w-5 h-5 mr-1" />
                 Transactions
               </Link>
-              <Link to="/upload" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                Upload
-              </Link>
-              <Link to="/planning" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+              <Link to="/planning" className="text-gray-700 hover:text-gray-900 px-3 py-2 flex items-center">
+                <CalendarDaysIcon className="w-5 h-5 mr-1" />
                 Planning
               </Link>
-              <Link to="/category" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+              <Link to="/category" className="text-gray-700 hover:text-gray-900 px-3 py-2 flex items-center">
+                <TagIcon className="w-5 h-5 mr-1" />
                 Categories
               </Link>
-              <Link to="/banking" className="text-gray-700 hover:text-gray-900 px-3 py-2">
+              <Link to="/banking" className="text-gray-700 hover:text-gray-900 px-3 py-2 flex items-center">
+                <BuildingLibraryIcon className="w-5 h-5 mr-1" />
                 Banking
+              </Link>
+              <Link to="/vault" className="text-gray-700 hover:text-gray-900 px-3 py-2 flex items-center">
+                <WalletIcon className="w-5 h-5 mr-1" />
+                Vault
               </Link>
               <button
                 onClick={logout}

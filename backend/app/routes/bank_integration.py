@@ -13,9 +13,9 @@ from backend.app.services.truelayer_service import TrueLayerService
 from backend.app.services.categorization_service import CategorizationService
 from backend.app.services.filter_service import TransactionFilterService
 from backend.app.schemas.schemas import (
-    TransactionFilterRuleCreate, 
-    TransactionFilterRuleUpdate, 
-    TransactionFilterRuleResponse
+    TransactionFilterRuleCreate,
+    TransactionFilterRuleUpdate,
+    TransactionFilterRuleResponse,
 )
 from pydantic import BaseModel
 
@@ -37,7 +37,7 @@ async def get_auth_link(current_user: User = Depends(get_current_user)):
     """Generate authentication link for connecting a bank account"""
     # Encode user ID into the state parameter
     state = base64.urlsafe_b64encode(str(current_user.id).encode()).decode()
-    
+
     auth_link = truelayer_service.generate_auth_link(state=state)
     return {"auth_link": auth_link, "state": state}
 
@@ -52,7 +52,7 @@ async def truelayer_callback(
     """Handle callback from TrueLayer after user authorizes access"""
     categorization_service = CategorizationService(db)
     filter_service = TransactionFilterService(db)
-    
+
     try:
         # Decode user_id from state
         try:
@@ -69,7 +69,7 @@ async def truelayer_callback(
         if not user:
             detail = "User not found for the provided state"
             raise HTTPException(status_code=404, detail=detail)
-        
+
         # Adjusted print statement for clarity and line length
         print(
             f"Callback for user_id: {user_id}, "
@@ -79,7 +79,7 @@ async def truelayer_callback(
         # Exchange code for access token
         token_data = truelayer_service.exchange_code_for_token(code)
         print("Successfully exchanged code for token")
-        
+
         # Get user accounts
         accounts = truelayer_service.get_accounts(token_data["access_token"])
         print(f"Retrieved {len(accounts)} accounts")
@@ -108,12 +108,14 @@ async def truelayer_callback(
             db.query(Transaction)
             .filter(
                 Transaction.user_id == user.id,
-                Transaction.bank_transaction_id.isnot(None)  # Make sure it's a bank transaction
+                Transaction.bank_transaction_id.isnot(
+                    None
+                ),  # Make sure it's a bank transaction
             )
             .order_by(Transaction.operation_date.desc())
             .first()
         )
-        
+
         # Set from_date based on the most recent transaction
         from_date = None
         if most_recent_transaction and most_recent_transaction.operation_date:
@@ -126,9 +128,9 @@ async def truelayer_callback(
         for account_data in accounts:
             # Fetch transactions with optional from_date
             transactions = truelayer_service.get_account_transactions(
-                token_data["access_token"], 
+                token_data["access_token"],
                 account_data["account_id"],
-                from_date=from_date
+                from_date=from_date,
             )
 
             # Import transactions
@@ -150,18 +152,18 @@ async def truelayer_callback(
                     # Skip income transactions (amount >= 0)
                     if tx_formatted["amount"] >= 0:
                         continue  # Skip this transaction
-                    
+
                     # Apply filter rules to see if we should skip this transaction
                     if filter_service.should_skip_transaction(user.id, tx_formatted):
                         transactions_filtered += 1
                         continue  # Skip filtered transaction
 
                     transaction = Transaction(**tx_formatted)
-                    
+
                     # Attempt automatic categorization now based on merchant_name OR description
                     categorization_service.apply_category_to_transaction(transaction)
                     # The transaction object might have category_id updated now
-                        
+
                     db.add(transaction)
                     transactions_imported += 1
 
@@ -217,12 +219,14 @@ async def refresh_transactions(
         db.query(Transaction)
         .filter(
             Transaction.bank_connection_id == connection.id,
-            Transaction.bank_transaction_id.isnot(None)  # Make sure it's a bank transaction
+            Transaction.bank_transaction_id.isnot(
+                None
+            ),  # Make sure it's a bank transaction
         )
         .order_by(Transaction.operation_date.desc())
         .first()
     )
-    
+
     # Set from_date to one day after the most recent transaction we have
     # or None if we don't have any transactions yet
     from_date = None
@@ -250,7 +254,6 @@ async def refresh_transactions(
                 status_code=401, detail="Failed to refresh token, reconnection required"
             )
 
-    try:
         # Get accounts
         accounts = truelayer_service.get_accounts(connection.access_token)
 
@@ -260,9 +263,9 @@ async def refresh_transactions(
         for account_data in accounts:
             # Fetch transactions with optional from_date
             transactions = truelayer_service.get_account_transactions(
-                connection.access_token, 
+                connection.access_token,
                 account_data["account_id"],
-                from_date=from_date  # Pass the from_date parameter
+                from_date=from_date,  # Pass the from_date parameter
             )
 
             # Import transactions
@@ -284,18 +287,20 @@ async def refresh_transactions(
                     # Skip income transactions (amount >= 0)
                     if tx_formatted["amount"] >= 0:
                         continue  # Skip this transaction
-                    
+
                     # Apply filter rules to see if we should skip this transaction
-                    if filter_service.should_skip_transaction(current_user.id, tx_formatted):
+                    if filter_service.should_skip_transaction(
+                        current_user.id, tx_formatted
+                    ):
                         transactions_filtered += 1
                         continue  # Skip filtered transaction
 
                     transaction = Transaction(**tx_formatted)
-                    
+
                     # Attempt automatic categorization now based on merchant_name OR description
                     categorization_service.apply_category_to_transaction(transaction)
                     # The transaction object might have category_id updated now
-                        
+
                     db.add(transaction)
                     transactions_imported += 1
 
@@ -306,17 +311,11 @@ async def refresh_transactions(
             "transactions_filtered": transactions_filtered,
         }
 
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error refreshing transactions: {str(e)}"
-        )
 
 # After the last endpoint, add the filter rule endpoints
 @router.get("/filter-rules", response_model=List[TransactionFilterRuleResponse])
 async def get_filter_rules(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all transaction filter rules for the current user"""
     filter_service = TransactionFilterService(db)
@@ -328,18 +327,18 @@ async def get_filter_rules(
 async def create_filter_rule(
     rule_data: TransactionFilterRuleCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new transaction filter rule"""
     filter_service = TransactionFilterService(db)
-    
+
     try:
         rule = filter_service.create_filter_rule(
             user_id=current_user.id,
             description_pattern=rule_data.description_pattern,
             merchant_name=rule_data.merchant_name,
             min_amount=rule_data.min_amount,
-            max_amount=rule_data.max_amount
+            max_amount=rule_data.max_amount,
         )
         return rule
     except ValueError as e:
@@ -351,11 +350,11 @@ async def update_filter_rule(
     rule_id: int,
     rule_data: TransactionFilterRuleUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update an existing transaction filter rule"""
     filter_service = TransactionFilterService(db)
-    
+
     try:
         updated_rule = filter_service.update_filter_rule(
             rule_id=rule_id,
@@ -364,15 +363,15 @@ async def update_filter_rule(
             merchant_name=rule_data.merchant_name,
             min_amount=rule_data.min_amount,
             max_amount=rule_data.max_amount,
-            is_active=rule_data.is_active
+            is_active=rule_data.is_active,
         )
-        
+
         if not updated_rule:
             raise HTTPException(
                 status_code=404,
-                detail="Filter rule not found or you don't have permission to update it"
+                detail="Filter rule not found or you don't have permission to update it",
             )
-            
+
         return updated_rule
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -382,18 +381,17 @@ async def update_filter_rule(
 async def delete_filter_rule(
     rule_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Delete a transaction filter rule"""
     filter_service = TransactionFilterService(db)
-    
+
     success = filter_service.delete_filter_rule(
-        rule_id=rule_id,
-        user_id=current_user.id
+        rule_id=rule_id, user_id=current_user.id
     )
-    
+
     if not success:
         raise HTTPException(
             status_code=404,
-            detail="Filter rule not found or you don't have permission to delete it"
+            detail="Filter rule not found or you don't have permission to delete it",
         )

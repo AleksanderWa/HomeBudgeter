@@ -5,7 +5,13 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional, List
 
 from backend.app.database.database import get_db
-from backend.app.models.transaction import Transaction, Category, Plan, CategoryLimit, PlanIncome
+from backend.app.models.transaction import (
+    Transaction,
+    Category,
+    Plan,
+    CategoryLimit,
+    PlanIncome,
+)
 from backend.app.models.user import User
 from backend.app.schemas.schemas import (
     CategoryResponse,
@@ -22,12 +28,16 @@ from backend.app.schemas.schemas import (
     CategoryLimitCreate,  # Added CategoryLimitCreate
     PlanIncomeCreate,
     PlanIncomeResponse,
+    RareExpensesResponse,
 )
 from backend.app.utils.auth import get_current_user
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+
+# Added import for RareExpensesService
+from backend.app.services.rare_expenses_service import RareExpensesService
 
 router = APIRouter()
 
@@ -59,7 +69,10 @@ async def get_plans(
     plans = (
         db.query(Plan).filter(Plan.user_id == current_user.id, Plan.year == year).all()
     )
-    return [PlanResponse(id=plan.id, month=plan.month, year=plan.year, user_id=plan.user_id) for plan in plans]
+    return [
+        PlanResponse(id=plan.id, month=plan.month, year=plan.year, user_id=plan.user_id)
+        for plan in plans
+    ]
 
 
 @router.put("/{plan_id}/category_limits/", response_model=CategoryLimitResponse)
@@ -70,11 +83,15 @@ async def update_category_limit(
     current_user: User = Depends(get_current_user),
 ):
     # Find the existing category limit
-    db_category_limit = db.query(CategoryLimit).filter(
-        CategoryLimit.category_id == category_limit.category_id,
-        CategoryLimit.user_id == current_user.id,
-        CategoryLimit.plan_id == plan_id
-    ).first()
+    db_category_limit = (
+        db.query(CategoryLimit)
+        .filter(
+            CategoryLimit.category_id == category_limit.category_id,
+            CategoryLimit.user_id == current_user.id,
+            CategoryLimit.plan_id == plan_id,
+        )
+        .first()
+    )
 
     if db_category_limit:
         # Update the existing limit
@@ -85,7 +102,7 @@ async def update_category_limit(
             category_id=category_limit.category_id,
             user_id=current_user.id,
             plan_id=plan_id,
-            limit=category_limit.limit
+            limit=category_limit.limit,
         )
         db.add(db_category_limit)
 
@@ -98,6 +115,7 @@ async def update_category_limit(
         user_id=db_category_limit.user_id,
         plan_id=db_category_limit.plan_id,
         limit=db_category_limit.limit,
+        is_draft=db_category_limit.is_draft,
     )
 
 
@@ -122,6 +140,7 @@ async def get_category_limits(
             user_id=category_limit.user_id,
             plan_id=category_limit.plan_id,
             limit=category_limit.limit,
+            is_draft=category_limit.is_draft,
         )
         for category_limit in category_limits
     ]
@@ -131,8 +150,12 @@ async def get_category_limits(
 async def create_category_limit(
     plan_id: int,
     category_limit: CategoryLimitCreate,
-    month: Optional[int] = Query(None, description="Month for creating a new plan if plan_id doesn't exist"),
-    year: Optional[int] = Query(None, description="Year for creating a new plan if plan_id doesn't exist"),
+    month: Optional[int] = Query(
+        None, description="Month for creating a new plan if plan_id doesn't exist"
+    ),
+    year: Optional[int] = Query(
+        None, description="Year for creating a new plan if plan_id doesn't exist"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -142,21 +165,21 @@ async def create_category_limit(
             current_date = datetime.now()
             month = month or current_date.month
             year = year or current_date.year
-            
+
         # Create new plan
-        new_plan = Plan(
-            month=month,
-            year=year,
-            user_id=current_user.id
-        )
+        new_plan = Plan(month=month, year=year, user_id=current_user.id)
         db.add(new_plan)
         db.commit()
         db.refresh(new_plan)
         plan_id = new_plan.id
     else:
         # Check if the specified plan exists
-        db_plan = db.query(Plan).filter(Plan.id == plan_id, Plan.user_id == current_user.id).first()
-        
+        db_plan = (
+            db.query(Plan)
+            .filter(Plan.id == plan_id, Plan.user_id == current_user.id)
+            .first()
+        )
+
         # If plan doesn't exist, create a new one
         if not db_plan:
             # If month and year are provided, use them; otherwise use current date
@@ -164,18 +187,14 @@ async def create_category_limit(
                 current_date = datetime.now()
                 month = month or current_date.month
                 year = year or current_date.year
-            
+
             # Create new plan
-            new_plan = Plan(
-                month=month,
-                year=year,
-                user_id=current_user.id
-            )
+            new_plan = Plan(month=month, year=year, user_id=current_user.id)
             db.add(new_plan)
             db.commit()
             db.refresh(new_plan)
             plan_id = new_plan.id
-    
+
     # Now check if the category limit already exists
     db_category_limit = (
         db.query(CategoryLimit)
@@ -187,7 +206,7 @@ async def create_category_limit(
         .first()
     )
     if db_category_limit:
-        raise HTTPException(status_code=400, detail='Limit already exists')
+        raise HTTPException(status_code=400, detail="Limit already exists")
 
     db_category_limit = CategoryLimit(
         plan_id=plan_id,
@@ -205,6 +224,7 @@ async def create_category_limit(
         category_id=db_category_limit.category_id,
         user_id=current_user.id,
         limit=db_category_limit.limit,
+        is_draft=db_category_limit.is_draft,
     )
 
 
@@ -239,20 +259,22 @@ async def create_or_update_plan_income(
     current_user: User = Depends(get_current_user),
 ):
     # Check if plan exists and belongs to user
-    db_plan = db.query(Plan).filter(
-        Plan.id == plan_id, 
-        Plan.user_id == current_user.id
-    ).first()
-    
+    db_plan = (
+        db.query(Plan)
+        .filter(Plan.id == plan_id, Plan.user_id == current_user.id)
+        .first()
+    )
+
     if not db_plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     # Check if income record already exists for this plan
-    existing_income = db.query(PlanIncome).filter(
-        PlanIncome.plan_id == plan_id,
-        PlanIncome.user_id == current_user.id
-    ).first()
-    
+    existing_income = (
+        db.query(PlanIncome)
+        .filter(PlanIncome.plan_id == plan_id, PlanIncome.user_id == current_user.id)
+        .first()
+    )
+
     if existing_income:
         # Update existing income
         existing_income.amount = income_data.amount
@@ -267,7 +289,7 @@ async def create_or_update_plan_income(
             plan_id=plan_id,
             user_id=current_user.id,
             amount=income_data.amount,
-            description=income_data.description
+            description=income_data.description,
         )
         db.add(new_income)
         db.commit()
@@ -282,20 +304,22 @@ async def get_plan_income(
     current_user: User = Depends(get_current_user),
 ):
     # Check if plan exists and belongs to user
-    db_plan = db.query(Plan).filter(
-        Plan.id == plan_id, 
-        Plan.user_id == current_user.id
-    ).first()
-    
+    db_plan = (
+        db.query(Plan)
+        .filter(Plan.id == plan_id, Plan.user_id == current_user.id)
+        .first()
+    )
+
     if not db_plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     # Get income for this plan
-    income = db.query(PlanIncome).filter(
-        PlanIncome.plan_id == plan_id,
-        PlanIncome.user_id == current_user.id
-    ).first()
-    
+    income = (
+        db.query(PlanIncome)
+        .filter(PlanIncome.plan_id == plan_id, PlanIncome.user_id == current_user.id)
+        .first()
+    )
+
     if not income:
         # Return a default empty income
         return {
@@ -303,9 +327,9 @@ async def get_plan_income(
             "plan_id": plan_id,
             "user_id": current_user.id,
             "amount": 0.0,
-            "description": None
+            "description": None,
         }
-    
+
     return income
 
 
@@ -316,23 +340,79 @@ async def delete_plan_income(
     current_user: User = Depends(get_current_user),
 ):
     # Check if plan exists and belongs to user
-    db_plan = db.query(Plan).filter(
-        Plan.id == plan_id, 
-        Plan.user_id == current_user.id
-    ).first()
-    
+    db_plan = (
+        db.query(Plan)
+        .filter(Plan.id == plan_id, Plan.user_id == current_user.id)
+        .first()
+    )
+
     if not db_plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     # Find income for this plan
-    income = db.query(PlanIncome).filter(
-        PlanIncome.plan_id == plan_id,
-        PlanIncome.user_id == current_user.id
-    ).first()
-    
+    income = (
+        db.query(PlanIncome)
+        .filter(PlanIncome.plan_id == plan_id, PlanIncome.user_id == current_user.id)
+        .first()
+    )
+
     if not income:
         raise HTTPException(status_code=404, detail="Income not found")
-    
+
     # Delete the income
     db.delete(income)
     db.commit()
+
+
+@router.get("/rare-expenses-summary", response_model=RareExpensesResponse)
+async def get_rare_expenses_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    rare_expenses_service: RareExpensesService = Depends(
+        RareExpensesService
+    ),  # Inject service
+):
+    """
+    Get a summary of rare expenses for the next 12 months and a suggested savings plan.
+    """
+    summary = rare_expenses_service.get_rare_expenses_summary(
+        user_id=current_user.id, db=db
+    )
+    return summary
+
+
+@router.post("/{plan_id}/category_limits/{category_limit_id}/accept", response_model=CategoryLimitResponse)
+async def accept_draft_category_limit(
+    plan_id: int,
+    category_limit_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Find the draft category limit
+    db_category_limit = (
+        db.query(CategoryLimit)
+        .filter(
+            CategoryLimit.id == category_limit_id,
+            CategoryLimit.plan_id == plan_id,
+            CategoryLimit.user_id == current_user.id,
+            CategoryLimit.is_draft == True,
+        )
+        .first()
+    )
+
+    if not db_category_limit:
+        raise HTTPException(status_code=404, detail="Draft category limit not found")
+
+    # Accept the draft by setting is_draft to False
+    db_category_limit.is_draft = False
+    db.commit()
+    db.refresh(db_category_limit)
+
+    return CategoryLimitResponse(
+        id=db_category_limit.id,
+        category_id=db_category_limit.category_id,
+        user_id=db_category_limit.user_id,
+        plan_id=db_category_limit.plan_id,
+        limit=db_category_limit.limit,
+        is_draft=db_category_limit.is_draft,
+    )
